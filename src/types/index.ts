@@ -145,6 +145,7 @@ export interface Message {
   replyTo?: Pick<Message, 'id' | 'content' | 'author'>;
   threadId: string | null;
   threadReplyCount?: number;
+  threadCount?: number;
   reactions: Reaction[];
   attachments: Attachment[];
   embeds: Embed[];
