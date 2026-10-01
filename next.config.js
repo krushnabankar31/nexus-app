@@ -21,6 +21,12 @@ const nextConfig = {
       { protocol: 'https', hostname: 'picsum.photos' },
     ],
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },

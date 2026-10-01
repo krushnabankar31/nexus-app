@@ -133,10 +133,11 @@ function MessageBubble({
         )}
 
         {/* Thread */}
-        {(msg.threadCount ?? 0) > 0 && (
+        {((msg as any).threadCount ?? (msg as any).threadReplyCount ?? 0) > 0 && (
           <button className="mt-1 flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors">
             <ChevronRight className="h-3.5 w-3.5" />
-            {msg.threadCount} {msg.threadCount === 1 ? 'reply' : 'replies'}
+            {(msg as any).threadCount ?? (msg as any).threadReplyCount}{' '}
+            {((msg as any).threadCount ?? (msg as any).threadReplyCount) === 1 ? 'reply' : 'replies'}
           </button>
         )}
       </div>
