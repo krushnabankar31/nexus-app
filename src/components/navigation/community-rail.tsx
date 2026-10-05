@@ -8,10 +8,10 @@ import {
   MessageCircle, Compass, Plus, Settings, LogOut,
   UserCircle, Bell, BellOff, Moon, Shield,
 } from 'lucide-react';
-import { MOCK_COMMUNITIES, MOCK_CURRENT_USER } from '@/lib/mock-data';
+import { MOCK_CURRENT_USER } from '@/lib/mock-data';
 import { useAuthStore } from '@/stores/auth-store';
-
-const JOINED = MOCK_COMMUNITIES.slice(0, 5);
+import { useCommunityStore } from '@/stores/community-store';
+import { useUiStore } from '@/stores/ui-store';
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
@@ -153,6 +153,13 @@ export function CommunityRail() {
   const router = useRouter();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  const { communities, joinedCommunityIds } = useCommunityStore();
+  const { openCreateCommunityModal } = useUiStore();
+
+  const joinedCommunities = communities.filter((c) =>
+    joinedCommunityIds.includes(c.id)
+  );
+
   const activeCommunityId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
 
   return (
@@ -190,7 +197,7 @@ export function CommunityRail() {
       <Sep />
 
       {/* Joined communities */}
-      {JOINED.map((c) => (
+      {joinedCommunities.map((c) => (
         <CommunityButton
           key={c.id}
           community={c}
@@ -215,7 +222,11 @@ export function CommunityRail() {
 
       {/* Create Community */}
       <Tooltip label="Create a Community">
-        <button className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2b2d31] text-emerald-400 transition-all duration-150 hover:rounded-2xl hover:bg-emerald-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+        <button
+          onClick={openCreateCommunityModal}
+          aria-label="Create a Community"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2b2d31] text-emerald-400 transition-all duration-150 hover:rounded-2xl hover:bg-emerald-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer"
+        >
           <Plus size={22} />
         </button>
       </Tooltip>
