@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -32,7 +32,8 @@ const GOOGLE_ACCOUNTS = [
   },
 ];
 
-export default function GoogleAuthPage() {
+// ── Inner component that uses useSearchParams ──────────────────────────────────
+function GoogleAuthInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuthStore();
@@ -43,13 +44,11 @@ export default function GoogleAuthPage() {
 
   const handleSelect = async (account: typeof GOOGLE_ACCOUNTS[0]) => {
     if (account.id === 'google_3') {
-      // "Add another account" — just pick the first one for demo
       handleSelect(GOOGLE_ACCOUNTS[0]);
       return;
     }
     setSelecting(account.id);
     setStep('loading');
-    // Simulate OAuth token exchange
     await new Promise((r) => setTimeout(r, 1800));
     await login(account.email, 'google-oauth');
     router.push(redirectTo);
@@ -62,7 +61,6 @@ export default function GoogleAuthPage() {
           <div className="rounded-2xl border border-gray-200 shadow-xl overflow-hidden bg-white">
             {/* Google header */}
             <div className="px-8 pt-8 pb-4 text-center border-b border-gray-100">
-              {/* Google logo SVG */}
               <svg className="mx-auto mb-4" width="75" height="24" viewBox="0 0 75 24" fill="none">
                 <path d="M30.81 12.28c0-.7-.06-1.37-.17-2.01H20.5v3.8h5.79a4.95 4.95 0 01-2.14 3.24v2.69h3.47c2.03-1.87 3.2-4.62 3.2-7.72z" fill="#4285F4"/>
                 <path d="M20.5 21c2.9 0 5.33-.96 7.1-2.6l-3.47-2.69c-.96.65-2.19 1.03-3.63 1.03-2.79 0-5.15-1.88-5.99-4.41h-3.58v2.78A10.7 10.7 0 0020.5 21z" fill="#34A853"/>
@@ -83,7 +81,6 @@ export default function GoogleAuthPage() {
                   disabled={!!selecting}
                   className="w-full flex items-center gap-4 px-6 py-3 hover:bg-gray-50 transition-colors text-left"
                 >
-                  {/* Avatar */}
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 overflow-hidden"
                     style={{ backgroundColor: account.color }}
@@ -94,12 +91,10 @@ export default function GoogleAuthPage() {
                       <span>{account.initials}</span>
                     )}
                   </div>
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">{account.name}</div>
                     <div className="text-xs text-gray-500 truncate">{account.email}</div>
                   </div>
-                  {/* Chevron */}
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400 flex-shrink-0">
                     <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -119,7 +114,7 @@ export default function GoogleAuthPage() {
             </div>
           </div>
         ) : (
-          /* Loading / signing in state */
+          /* Loading state */
           <div className="rounded-2xl border border-gray-200 shadow-xl p-10 bg-white text-center">
             <div className="flex justify-center mb-6">
               <svg width="75" height="24" viewBox="0 0 75 24" fill="none">
@@ -130,17 +125,32 @@ export default function GoogleAuthPage() {
                 <text x="34" y="18" fontFamily="Arial" fontSize="18" fontWeight="700" fill="#202124">Google</text>
               </svg>
             </div>
-
-            {/* Spinner */}
             <div className="flex justify-center mb-5">
               <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
             </div>
-
             <p className="text-gray-600 text-sm">Signing you in…</p>
             <p className="text-gray-400 text-xs mt-1">Please wait, connecting to Nexus</p>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// ── Fallback while suspense loads ─────────────────────────────────────────────
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+    </div>
+  );
+}
+
+// ── Default export wraps inner in Suspense (required for useSearchParams) ─────
+export default function GoogleAuthPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <GoogleAuthInner />
+    </Suspense>
   );
 }
