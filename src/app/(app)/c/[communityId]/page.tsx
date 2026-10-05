@@ -46,15 +46,19 @@ const QUICK_CHANNELS = [
 
 export default function CommunityPage() {
   const params = useParams<{ communityId: string }>();
-  const { activeCommunity, members } = useCommunityStore();
+  const { communities, activeCommunity, members } = useCommunityStore();
 
-  const community = activeCommunity ?? MOCK_COMMUNITIES.find((c) => c.id === params.communityId) ?? MOCK_COMMUNITIES[0];
+  const community =
+    communities.find((c) => c.id === params.communityId) ??
+    activeCommunity ??
+    MOCK_COMMUNITIES.find((c) => c.id === params.communityId) ??
+    MOCK_COMMUNITIES[0];
+
   const onlineMembers = members.filter((m) => m.user?.status !== 'offline').slice(0, 8);
   const recentMessages = MOCK_MESSAGES.filter((m) => !m.deletedAt).slice(-5).reverse();
 
-  const accentGradient = community.accentColor
-    ? `from-[${community.accentColor}]/30 via-[hsl(var(--bg-raised))] to-[hsl(var(--bg-raised))]`
-    : 'from-brand-500/20 via-[hsl(var(--bg-raised))] to-[hsl(var(--bg-raised))]';
+  const accentColor = community.accentColor ?? '#6366f1';
+  const accentGradient = `from-[${accentColor}]/30 via-[hsl(var(--bg-raised))] to-[hsl(var(--bg-raised))]`;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -248,10 +252,10 @@ export default function CommunityPage() {
           {/* About */}
           <div className="rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-4">
             <h3 className="mb-2 font-bold text-white">About</h3>
-            <p className="text-sm text-gray-300 leading-relaxed">{community.description}</p>
-            {community.tags.length > 0 && (
+            <p className="text-sm text-gray-300 leading-relaxed">{community.description || 'Welcome to this community.'}</p>
+            {(community.tags ?? []).length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {community.tags.map((tag) => (
+                {(community.tags ?? []).map((tag) => (
                   <span key={tag} className="rounded-full bg-white/8 border border-white/10 px-2 py-0.5 text-xs text-gray-400">
                     {tag}
                   </span>
@@ -265,10 +269,10 @@ export default function CommunityPage() {
             <h3 className="mb-3 font-bold text-white">Stats</h3>
             <div className="space-y-2.5">
               {[
-                ['Members', community.memberCount.toLocaleString()],
-                ['Online Now', community.onlineCount.toLocaleString()],
-                ['Category', community.category.charAt(0).toUpperCase() + community.category.slice(1)],
-                ['Created', new Date(community.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })],
+                ['Members', (community.memberCount ?? 1).toLocaleString()],
+                ['Online Now', (community.onlineCount ?? 1).toLocaleString()],
+                ['Category', community.category ? (community.category.charAt(0).toUpperCase() + community.category.slice(1)) : 'General'],
+                ['Created', community.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'],
               ].map(([label, val]) => (
                 <div key={label} className="flex items-center justify-between">
                   <span className="text-sm text-gray-400">{label}</span>

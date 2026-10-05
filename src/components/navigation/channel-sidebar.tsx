@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useCommunityStore } from '@/stores/community-store';
 import {
   MOCK_CHANNEL_CATEGORIES,
   MOCK_COMMUNITIES,
@@ -214,7 +215,16 @@ export function ChannelSidebar() {
   const communityId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
   const channelId = pathname.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
 
-  const community = MOCK_COMMUNITIES.find((c) => c.id === communityId);
+  const { communities } = useCommunityStore();
+  const community =
+    communities.find((c) => c.id === communityId) ??
+    MOCK_COMMUNITIES.find((c) => c.id === communityId) ??
+    (communityId
+      ? {
+          id: communityId,
+          name: communityId.replace(/^com_/, '').replace(/[_-]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        }
+      : null);
   const isDMs = pathname.startsWith('/messages');
 
   // ── DM View ────────────────────────────────────────────────────────────────
