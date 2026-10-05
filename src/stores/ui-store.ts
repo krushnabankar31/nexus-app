@@ -19,8 +19,10 @@ interface UiState {
   threadPanelOpen: boolean;
   activeThreadId: string | null;
   profilePopoverUserId: string | null;
+  createCommunityModalOpen: boolean;
 
-  toggleTheme: () => void;
+  openCreateCommunityModal: () => void;
+  closeCreateCommunityModal: () => void;
   setTheme: (theme: Theme) => void;
   setActiveCommunity: (id: string | null) => void;
   setActiveChannel: (id: string | null) => void;
@@ -55,6 +57,10 @@ export const useUiStore = create<UiState>()(
         threadPanelOpen: false,
         activeThreadId: null,
         profilePopoverUserId: null,
+        createCommunityModalOpen: false,
+
+        openCreateCommunityModal: () => set({ createCommunityModalOpen: true }),
+        closeCreateCommunityModal: () => set({ createCommunityModalOpen: false }),
 
         toggleTheme: () =>
           set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),

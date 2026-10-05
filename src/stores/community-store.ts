@@ -21,6 +21,7 @@ interface CommunityState {
   joinCommunity: (communityId: string) => void;
   leaveCommunity: (communityId: string) => void;
   updateChannel: (channelId: string, updates: Partial<Channel>) => void;
+  addCommunity: (community: Community) => void;
 }
 
 const INITIAL_MEMBERS: CommunityMember[] = [CURRENT_USER, ...MOCK_USERS].slice(0, 12).map((user, i) => ({
@@ -76,6 +77,14 @@ export const useCommunityStore = create<CommunityState>()((set) => ({
           ch.id === channelId ? { ...ch, ...updates } : ch
         ),
       })),
+    }));
+  },
+
+  addCommunity: (community) => {
+    set((state) => ({
+      communities: [community, ...state.communities],
+      joinedCommunityIds: [community.id, ...state.joinedCommunityIds],
+      activeCommunity: community,
     }));
   },
 }));

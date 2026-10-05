@@ -12,6 +12,7 @@ import { CommunityRail } from "@/components/navigation/community-rail";
 import { ChannelSidebar } from "@/components/navigation/channel-sidebar";
 import { MemberPanel } from "@/components/panels/member-panel";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
+import { CreateCommunityModal } from "@/components/modals/create-community-modal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -158,6 +159,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Global Modals */}
+      <CreateCommunityModal />
     </div>
   );
 }

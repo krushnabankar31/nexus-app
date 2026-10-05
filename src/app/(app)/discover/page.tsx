@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { MOCK_COMMUNITIES } from '@/lib/mock-data';
 import { useCommunityStore } from '@/stores/community-store';
+import { useUiStore } from '@/stores/ui-store';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -275,6 +276,7 @@ function StatsBanner() {
 export default function DiscoverPage() {
   const router = useRouter();
   const { setActiveCommunity } = useCommunityStore();
+  const { openCreateCommunityModal } = useUiStore();
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -424,7 +426,10 @@ export default function DiscoverPage() {
                   <h3 className="text-2xl font-bold text-white mb-2">Can't find your community?</h3>
                   <p className="text-slate-400 text-sm max-w-md">Start your own space in seconds. Customize it, invite people, and watch it grow.</p>
                 </div>
-                <button className="relative flex-shrink-0 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold hover:opacity-90 transition-opacity shadow-xl shadow-indigo-500/30 flex items-center gap-2">
+                <button
+                  onClick={openCreateCommunityModal}
+                  className="relative flex-shrink-0 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold hover:opacity-90 transition-opacity shadow-xl shadow-indigo-500/30 flex items-center gap-2 cursor-pointer"
+                >
                   <Sparkles size={16} /> Create a Community
                 </button>
               </div>
