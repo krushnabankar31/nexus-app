@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
   MOCK_COMMUNITIES,
   MOCK_CHANNEL_CATEGORIES,
@@ -35,13 +36,15 @@ const INITIAL_MEMBERS: CommunityMember[] = [CURRENT_USER, ...MOCK_USERS].slice(0
   user,
 }));
 
-export const useCommunityStore = create<CommunityState>()((set) => ({
-  communities: MOCK_COMMUNITIES,
-  joinedCommunityIds: ['community-1', 'community-2', 'community-4', 'community-5'],
-  activeCommunity: MOCK_COMMUNITIES[0],
-  categories: MOCK_CHANNEL_CATEGORIES,
-  activeChannel: MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null,
-  members: INITIAL_MEMBERS,
+export const useCommunityStore = create<CommunityState>()(
+  persist(
+    (set) => ({
+      communities: MOCK_COMMUNITIES,
+      joinedCommunityIds: ['community-1', 'community-2', 'community-4', 'community-5'],
+      activeCommunity: MOCK_COMMUNITIES[0],
+      categories: MOCK_CHANNEL_CATEGORIES,
+      activeChannel: MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null,
+      members: INITIAL_MEMBERS,
 
   setCommunities: (communities) => set({ communities }),
 
@@ -87,4 +90,13 @@ export const useCommunityStore = create<CommunityState>()((set) => ({
       activeCommunity: community,
     }));
   },
-}));
+}),
+    {
+      name: 'nexus-community-store',
+      partialize: (state) => ({
+        communities: state.communities,
+        joinedCommunityIds: state.joinedCommunityIds,
+      }),
+    }
+  )
+);

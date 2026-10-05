@@ -17,6 +17,7 @@ import {
   Tooltip as RechartTooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
 import { MOCK_COMMUNITIES, MOCK_USERS, MOCK_ANALYTICS, CURRENT_USER } from '@/lib/mock-data';
+import { useCommunityStore } from '@/stores/community-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AdminSection =
@@ -574,7 +575,11 @@ export default function CommunityAdminPage() {
   const router = useRouter();
   const [section, setSection] = useState<AdminSection>('overview');
 
-  const community = MOCK_COMMUNITIES.find((c) => c.id === communityId);
+  const { communities } = useCommunityStore();
+  const community =
+    communities.find((c) => c.id === communityId) ??
+    MOCK_COMMUNITIES.find((c) => c.id === communityId) ??
+    MOCK_COMMUNITIES[0];
 
   const renderSection = () => {
     switch (section) {
