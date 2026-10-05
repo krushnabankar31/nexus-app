@@ -65,14 +65,26 @@ export default function CommunityPage() {
           background: `linear-gradient(135deg, ${community.accentColor ?? '#6366f1'}33, ${community.accentColor ?? '#8b5cf6'}22, hsl(var(--bg-raised)))`,
         }}
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[hsl(var(--bg-base))] opacity-70" />
+        {/* Real banner image */}
+        {(community as any).banner && (
+          <img
+            src={(community as any).banner}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-40"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[hsl(var(--bg-base))] opacity-80" />
         {/* Community info overlay at bottom */}
         <div className="absolute bottom-4 left-6 flex items-end gap-4">
           <div
-            className="flex h-16 w-16 items-center justify-center rounded-2xl text-4xl shadow-lg ring-4 ring-[hsl(var(--bg-base))]"
-            style={{ background: `${community.accentColor ?? '#6366f1'}33` }}
+            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg ring-4 ring-[hsl(var(--bg-base))] overflow-hidden flex-shrink-0"
+            style={{ background: `${community.accentColor ?? '#6366f1'}55` }}
           >
-            {community.icon ?? '🌐'}
+            {community.icon && community.icon.startsWith('http') ? (
+              <img src={community.icon} alt={community.name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-4xl">{community.icon || '🌐'}</span>
+            )}
           </div>
           <div className="pb-1">
             <div className="flex items-center gap-2">
