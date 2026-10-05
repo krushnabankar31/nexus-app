@@ -1,156 +1,235 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Script from 'next/script';
 import { useAuthStore } from '@/stores/auth-store';
+import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 
-// Mock Google accounts to simulate the account chooser
-const GOOGLE_ACCOUNTS = [
-  {
-    id: 'google_1',
-    name: 'Alex Johnson',
-    email: 'alex.johnson@gmail.com',
-    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=AlexJ&backgroundColor=6366f1',
-    initials: 'AJ',
-    color: '#6366f1',
-  },
-  {
-    id: 'google_2',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@gmail.com',
-    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=SarahC&backgroundColor=8b5cf6',
-    initials: 'SC',
-    color: '#8b5cf6',
-  },
-  {
-    id: 'google_3',
-    name: 'You (add account)',
-    email: 'Use another account',
-    avatar: '',
-    initials: '+',
-    color: '#374151',
-  },
-];
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
 
-// ── Inner component that uses useSearchParams ──────────────────────────────────
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 function GoogleAuthInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuthStore();
-  const [selecting, setSelecting] = useState<string | null>(null);
-  const [step, setStep] = useState<'choose' | 'loading'>('choose');
+  const { loginWithGoogle } = useAuthStore();
 
   const redirectTo = searchParams.get('redirect') ?? '/discover';
 
-  const handleSelect = async (account: typeof GOOGLE_ACCOUNTS[0]) => {
-    if (account.id === 'google_3') {
-      handleSelect(GOOGLE_ACCOUNTS[0]);
-      return;
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleSdkReady, setGoogleSdkReady] = useState(false);
+
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  // Initialize official Google Identity Services if client ID is configured
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (typeof window !== 'undefined' && window.google?.accounts?.id && clientId) {
+      setGoogleSdkReady(true);
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (response: any) => {
+          if (response?.credential) {
+            const payload = parseJwt(response.credential);
+            if (payload) {
+              setLoading(true);
+              await loginWithGoogle({
+                email: payload.email,
+                name: payload.name,
+                avatar: payload.picture,
+              });
+              router.push(redirectTo);
+            }
+          }
+        },
+      });
+
+      if (googleBtnRef.current) {
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'outline',
+          size: 'large',
+          width: 320,
+          text: 'continue_with',
+        });
+      }
     }
-    setSelecting(account.id);
-    setStep('loading');
-    await new Promise((r) => setTimeout(r, 1800));
-    await login(account.email, 'google-oauth');
+  }, [googleSdkReady, loginWithGoogle, redirectTo, router]);
+
+  const handleCustomGoogleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+
+    setLoading(true);
+
+    const displayName = fullName.trim() || email.split('@')[0];
+    const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=6366f1`;
+
+    await loginWithGoogle({
+      email: email.trim(),
+      name: displayName,
+      avatar: avatarUrl,
+    });
+
     router.push(redirectTo);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white font-sans">
-      <div className="w-full max-w-sm mx-auto">
-        {step === 'choose' ? (
-          <div className="rounded-2xl border border-gray-200 shadow-xl overflow-hidden bg-white">
-            {/* Google header */}
-            <div className="px-8 pt-8 pb-4 text-center border-b border-gray-100">
-              <svg className="mx-auto mb-4" width="75" height="24" viewBox="0 0 75 24" fill="none">
-                <path d="M30.81 12.28c0-.7-.06-1.37-.17-2.01H20.5v3.8h5.79a4.95 4.95 0 01-2.14 3.24v2.69h3.47c2.03-1.87 3.2-4.62 3.2-7.72z" fill="#4285F4"/>
-                <path d="M20.5 21c2.9 0 5.33-.96 7.1-2.6l-3.47-2.69c-.96.65-2.19 1.03-3.63 1.03-2.79 0-5.15-1.88-5.99-4.41h-3.58v2.78A10.7 10.7 0 0020.5 21z" fill="#34A853"/>
-                <path d="M14.51 12.33a6.38 6.38 0 010-4.06V5.49h-3.58a10.7 10.7 0 000 9.62l3.58-2.78z" fill="#FBBC05"/>
-                <path d="M20.5 6.86a5.78 5.78 0 014.09 1.6l3.06-3.06A10.27 10.27 0 0020.5 3a10.7 10.7 0 00-9.57 5.9l3.58 2.78c.84-2.53 3.2-4.41 5.99-4.41z" fill="#EA4335"/>
-                <text x="34" y="18" fontFamily="Arial" fontSize="18" fontWeight="700" fill="#202124">Google</text>
-              </svg>
-              <h2 className="text-xl font-normal text-gray-800 mt-1">Sign in with Google</h2>
-              <p className="text-sm text-gray-500 mt-1">to continue to Nexus</p>
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0c0e] font-sans px-4 py-8">
+      {/* Background ambient lighting */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-violet-600/10 rounded-full blur-3xl" />
+      </div>
 
-            {/* Account list */}
-            <div className="py-2">
-              {GOOGLE_ACCOUNTS.map((account) => (
-                <button
-                  key={account.id}
-                  onClick={() => handleSelect(account)}
-                  disabled={!!selecting}
-                  className="w-full flex items-center gap-4 px-6 py-3 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 overflow-hidden"
-                    style={{ backgroundColor: account.color }}
-                  >
-                    {account.avatar && account.id !== 'google_3' ? (
-                      <img src={account.avatar} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{account.initials}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{account.name}</div>
-                    <div className="text-xs text-gray-500 truncate">{account.email}</div>
-                  </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400 flex-shrink-0">
-                    <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-between">
-              <a href="/login" className="text-sm text-blue-600 hover:text-blue-700 hover:underline">
-                Use email instead
-              </a>
-              <div className="flex gap-3 text-xs text-gray-400">
-                <a href="#" className="hover:underline">Privacy</a>
-                <a href="#" className="hover:underline">Terms</a>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Loading state */
-          <div className="rounded-2xl border border-gray-200 shadow-xl p-10 bg-white text-center">
-            <div className="flex justify-center mb-6">
-              <svg width="75" height="24" viewBox="0 0 75 24" fill="none">
-                <path d="M30.81 12.28c0-.7-.06-1.37-.17-2.01H20.5v3.8h5.79a4.95 4.95 0 01-2.14 3.24v2.69h3.47c2.03-1.87 3.2-4.62 3.2-7.72z" fill="#4285F4"/>
-                <path d="M20.5 21c2.9 0 5.33-.96 7.1-2.6l-3.47-2.69c-.96.65-2.19 1.03-3.63 1.03-2.79 0-5.15-1.88-5.99-4.41h-3.58v2.78A10.7 10.7 0 0020.5 21z" fill="#34A853"/>
-                <path d="M14.51 12.33a6.38 6.38 0 010-4.06V5.49h-3.58a10.7 10.7 0 000 9.62l3.58-2.78z" fill="#FBBC05"/>
-                <path d="M20.5 6.86a5.78 5.78 0 014.09 1.6l3.06-3.06A10.27 10.27 0 0020.5 3a10.7 10.7 0 00-9.57 5.9l3.58 2.78c.84-2.53 3.2-4.41 5.99-4.41z" fill="#EA4335"/>
-                <text x="34" y="18" fontFamily="Arial" fontSize="18" fontWeight="700" fill="#202124">Google</text>
+      <div className="relative w-full max-w-md mx-auto">
+        {/* Card */}
+        <div className="rounded-3xl border border-white/10 shadow-2xl bg-[#141518]/90 backdrop-blur-xl overflow-hidden p-8">
+          {/* Header */}
+          <div className="text-center mb-7">
+            {/* Google Logo */}
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white shadow-md mb-4">
+              <svg width="28" height="28" viewBox="0 0 24 24">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  fill="#EA4335"
+                />
               </svg>
             </div>
-            <div className="flex justify-center mb-5">
-              <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-            </div>
-            <p className="text-gray-600 text-sm">Signing you in…</p>
-            <p className="text-gray-400 text-xs mt-1">Please wait, connecting to Nexus</p>
+
+            <h1 className="text-2xl font-bold text-white tracking-tight">Sign in with Google</h1>
+            <p className="text-sm text-slate-400 mt-1.5">
+              Connect your original Google account to Nexus
+            </p>
           </div>
-        )}
+
+          {/* Official Google Button Container (if Google Client ID configured) */}
+          <div ref={googleBtnRef} className="flex justify-center mb-4" />
+
+          {/* User's Original Google Account Form */}
+          <form onSubmit={handleCustomGoogleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Your Real Google Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g. yourname@gmail.com"
+                className="w-full rounded-xl bg-[#0e0f11] border border-white/10 px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Your Full Name
+              </label>
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g. Krushna Bankar"
+                className="w-full rounded-xl bg-[#0e0f11] border border-white/10 px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !email.trim()}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:opacity-95 active:scale-[0.99] transition-all shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Connecting Google Account...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign in with Google</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Features note */}
+          <div className="mt-6 pt-5 border-t border-white/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
+              <span>Aapka real email aur profile Nexus par link hoga</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <ShieldCheck size={14} className="text-indigo-400 flex-shrink-0" />
+              <span>Encrypted session with instant access</span>
+            </div>
+          </div>
+
+          {/* Footer return link */}
+          <div className="mt-6 text-center">
+            <a
+              href="/login"
+              className="text-xs text-slate-400 hover:text-white transition-colors underline-offset-4 hover:underline"
+            >
+              ← Back to standard login
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Fallback while suspense loads ─────────────────────────────────────────────
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0c0e]">
+      <div className="w-10 h-10 border-4 border-white/10 border-t-indigo-500 rounded-full animate-spin" />
     </div>
   );
 }
 
-// ── Default export wraps inner in Suspense (required for useSearchParams) ─────
 export default function GoogleAuthPage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <GoogleAuthInner />
-    </Suspense>
+    <>
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
+      <Suspense fallback={<LoadingFallback />}>
+        <GoogleAuthInner />
+      </Suspense>
+    </>
   );
 }
