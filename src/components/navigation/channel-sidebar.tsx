@@ -11,10 +11,10 @@ import {
 } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCommunityStore } from '@/stores/community-store';
+import { useCommunityStore, getDefaultCategories } from '@/stores/community-store';
 import {
-  MOCK_CHANNEL_CATEGORIES,
-  MOCK_COMMUNITIES,
+  
+  
   MOCK_DMS,
   MOCK_CURRENT_USER,
 } from '@/lib/mock-data';
@@ -224,11 +224,10 @@ export function ChannelSidebar() {
   const communityId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
   const channelId = pathname.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
 
-  const { communities } = useCommunityStore();
+  const { communities, categories, activeCommunity } = useCommunityStore();
   const community =
     communities.find((c) => c.id === communityId) ??
-    MOCK_COMMUNITIES.find((c) => c.id === communityId) ??
-    (communityId
+        (communityId
       ? {
           id: communityId,
           name: communityId.replace(/^com_/, '').replace(/[_-]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
@@ -315,7 +314,7 @@ export function ChannelSidebar() {
       {/* Channels */}
       <div className="flex-1 overflow-y-auto px-2 pt-2 scrollbar-thin scrollbar-thumb-white/10">
         {communityId ? (
-          MOCK_CHANNEL_CATEGORIES.map((cat) => (
+          (categories.length > 0 ? categories : getDefaultCategories(communityId)).map((cat) => (
             <Category
               key={cat.id}
               category={cat as any}

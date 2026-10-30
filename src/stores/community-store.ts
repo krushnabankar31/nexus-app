@@ -1,12 +1,6 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import {
-  MOCK_COMMUNITIES,
-  MOCK_CHANNEL_CATEGORIES,
-  MOCK_USERS,
-  CURRENT_USER,
-} from '@/lib/mock-data';
-import type { Community, Channel, ChannelCategory, CommunityMember } from '@nexus/types';
+import type { Community, Channel, ChannelCategory, CommunityMember, User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -19,6 +13,7 @@ interface CommunityState {
   members: CommunityMember[];
 
   initCommunitiesListener: () => () => void;
+  initMembersListener: () => () => void;
   setCommunities: (communities: Community[]) => void;
   setActiveCommunity: (community: Community | null) => void;
   setActiveChannel: (channel: Channel | null) => void;
@@ -28,26 +23,87 @@ interface CommunityState {
   addCommunity: (community: Community) => Promise<void>;
 }
 
-const INITIAL_MEMBERS: CommunityMember[] = [CURRENT_USER, ...MOCK_USERS].slice(0, 12).map((user, i) => ({
-  userId: user.id,
-  communityId: 'community-1',
-  nickname: null,
-  roles: i === 0 ? [{ id: 'role-admin', communityId: 'community-1', name: 'Admin', color: '#ef4444', icon: null, position: 100, isDefault: false, isMentionable: true, isHoisted: true, permissions: ['administrator' as const] }]
-    : i === 1 ? [{ id: 'role-mod', communityId: 'community-1', name: 'Moderator', color: '#f59e0b', icon: null, position: 90, isDefault: false, isMentionable: true, isHoisted: true, permissions: ['moderate_content' as const] }]
-    : [{ id: 'role-member', communityId: 'community-1', name: 'Member', color: '#6b7280', icon: null, position: 1, isDefault: true, isMentionable: false, isHoisted: false, permissions: ['send_messages' as const] }],
-  joinedAt: user.createdAt,
-  user,
-}));
+export function getDefaultCategories(communityId: string): ChannelCategory[] {
+  return [
+    {
+      id: `cat_${communityId}_welcome`,
+      name: 'Welcome',
+      communityId,
+      position: 1,
+      channels: [
+        {
+          id: `ch_${communityId}_announcements`,
+          name: 'announcements',
+          type: 'announcement',
+          categoryId: `cat_${communityId}_welcome`,
+          communityId,
+          topic: 'Important announcements and updates',
+          position: 1,
+        },
+        {
+          id: `ch_${communityId}_rules`,
+          name: 'rules',
+          type: 'text',
+          categoryId: `cat_${communityId}_welcome`,
+          topic: 'Community guidelines and rules',
+          position: 2,
+        },
+      ],
+    },
+    {
+      id: `cat_${communityId}_text`,
+      name: 'Text Channels',
+      communityId,
+      position: 2,
+      channels: [
+        {
+          id: `ch_${communityId}_general`,
+          name: 'general',
+          type: 'text',
+          categoryId: `cat_${communityId}_text`,
+          communityId,
+          topic: 'General community discussion',
+          position: 1,
+        },
+        {
+          id: `ch_${communityId}_chat`,
+          name: 'chit-chat',
+          type: 'text',
+          categoryId: `cat_${communityId}_text`,
+          communityId,
+          topic: 'Casual conversations',
+          position: 2,
+        },
+      ],
+    },
+    {
+      id: `cat_${communityId}_voice`,
+      name: 'Voice Channels',
+      communityId,
+      position: 3,
+      channels: [
+        {
+          id: `ch_${communityId}_lounge`,
+          name: 'Lounge',
+          type: 'voice',
+          categoryId: `cat_${communityId}_voice`,
+          communityId,
+          position: 1,
+        },
+      ],
+    },
+  ];
+}
 
 export const useCommunityStore = create<CommunityState>()(
   persist(
     (set, get) => ({
-      communities: MOCK_COMMUNITIES,
-      joinedCommunityIds: ['community-1', 'community-2', 'community-4', 'community-5'],
-      activeCommunity: MOCK_COMMUNITIES[0],
-      categories: MOCK_CHANNEL_CATEGORIES,
-      activeChannel: MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null,
-      members: INITIAL_MEMBERS,
+      communities: [],
+      joinedCommunityIds: [],
+      activeCommunity: null,
+      categories: [],
+      activeChannel: null,
+      members: [],
 
       initCommunitiesListener: () => {
         if (!isFirebaseConfigured() || !db) {
@@ -57,22 +113,27 @@ export const useCommunityStore = create<CommunityState>()(
         try {
           const communitiesCol = collection(db, 'communities');
           const unsubscribe = onSnapshot(communitiesCol, (snapshot) => {
-            if (!snapshot.empty) {
-              const remoteCommunities: Community[] = [];
-              snapshot.forEach((docSnap) => {
-                const data = docSnap.data() as Community;
+            const remoteCommunities: Community[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as Community;
+              if (data && docSnap.id && !docSnap.id.startsWith('community-')) {
                 remoteCommunities.push({ ...data, id: docSnap.id });
-              });
+              }
+            });
 
-              // Merge remote communities with default mock communities (avoiding duplicate IDs)
-              const existingIds = new Set(remoteCommunities.map((c) => c.id));
-              const merged = [
-                ...remoteCommunities,
-                ...MOCK_COMMUNITIES.filter((c) => !existingIds.has(c.id)),
-              ];
+            set((state) => {
+              const currentActive = state.activeCommunity;
+              const updatedActive = currentActive
+                ? remoteCommunities.find((c) => c.id === currentActive.id) ?? (remoteCommunities[0] ?? null)
+                : remoteCommunities[0] ?? null;
 
-              set({ communities: merged });
-            }
+              return {
+                communities: remoteCommunities,
+                activeCommunity: updatedActive,
+                categories: updatedActive ? getDefaultCategories(updatedActive.id) : [],
+                activeChannel: updatedActive ? (getDefaultCategories(updatedActive.id)[1]?.channels[0] ?? null) : null,
+              };
+            });
           });
 
           return unsubscribe;
@@ -82,13 +143,54 @@ export const useCommunityStore = create<CommunityState>()(
         }
       },
 
+      initMembersListener: () => {
+        if (!isFirebaseConfigured() || !db) {
+          return () => {};
+        }
+
+        try {
+          const usersCol = collection(db, 'users');
+          const unsubscribe = onSnapshot(usersCol, (snapshot) => {
+            const remoteUsers: User[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as User;
+              if (data && docSnap.id) {
+                remoteUsers.push({ ...data, id: docSnap.id });
+              }
+            });
+
+            const activeId = get().activeCommunity?.id || 'main';
+            const realMembers: CommunityMember[] = remoteUsers.map((user, idx) => ({
+              userId: user.id,
+              communityId: activeId,
+              nickname: null,
+              roles: [
+                idx === 0
+                  ? { id: 'role-admin', communityId: activeId, name: 'Admin', color: '#ef4444', icon: null, position: 100, isDefault: false, isMentionable: true, isHoisted: true, permissions: ['administrator' as const] }
+                  : { id: 'role-member', communityId: activeId, name: 'Member', color: '#6b7280', icon: null, position: 1, isDefault: true, isMentionable: false, isHoisted: false, permissions: ['send_messages' as const] }
+              ],
+              joinedAt: user.createdAt || new Date().toISOString(),
+              user,
+            }));
+
+            set({ members: realMembers });
+          });
+
+          return unsubscribe;
+        } catch (err) {
+          console.warn('Members listener error:', err);
+          return () => {};
+        }
+      },
+
       setCommunities: (communities) => set({ communities }),
 
       setActiveCommunity: (community) => {
+        const categories = community ? getDefaultCategories(community.id) : [];
         set({
           activeCommunity: community,
-          categories: community ? MOCK_CHANNEL_CATEGORIES : [],
-          activeChannel: community ? (MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null) : null,
+          categories,
+          activeChannel: categories[1]?.channels[0] ?? null,
         });
       },
 
@@ -120,14 +222,15 @@ export const useCommunityStore = create<CommunityState>()(
       },
 
       addCommunity: async (community) => {
-        // Optimistic local state update
+        const categories = getDefaultCategories(community.id);
         set((state) => ({
           communities: [community, ...state.communities.filter((c) => c.id !== community.id)],
           joinedCommunityIds: [community.id, ...state.joinedCommunityIds],
           activeCommunity: community,
+          categories,
+          activeChannel: categories[1]?.channels[0] ?? null,
         }));
 
-        // Cloud Firestore sync
         if (isFirebaseConfigured() && db) {
           try {
             await setDoc(doc(db, 'communities', community.id), {
@@ -142,9 +245,22 @@ export const useCommunityStore = create<CommunityState>()(
     }),
     {
       name: 'nexus-community-store',
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.communities = (state.communities || []).filter(
+            (c) => c && c.id && !c.id.startsWith('community-')
+          );
+          state.joinedCommunityIds = (state.joinedCommunityIds || []).filter(
+            (id) => id && !id.startsWith('community-')
+          );
+          if (state.activeCommunity?.id?.startsWith('community-')) {
+            state.activeCommunity = state.communities[0] || null;
+          }
+        }
+      },
       partialize: (state) => ({
-        communities: state.communities,
-        joinedCommunityIds: state.joinedCommunityIds,
+        communities: state.communities.filter((c) => !c.id.startsWith('community-')),
+        joinedCommunityIds: state.joinedCommunityIds.filter((id) => !id.startsWith('community-')),
       }),
     }
   )
