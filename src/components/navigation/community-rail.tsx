@@ -190,8 +190,7 @@ export function CommunityRail() {
           >
             <MessageCircle size={22} />
           </Link>
-          {/* Unread badge */}
-          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[hsl(var(--bg-sunken))] bg-red-500 text-[9px] font-bold text-white pointer-events-none">9</span>
+          {/* No unread DMs — badge hidden until real DM system is implemented */}
         </div>
       </Tooltip>
 
