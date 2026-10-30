@@ -7,6 +7,8 @@ import {
   CURRENT_USER,
 } from '@/lib/mock-data';
 import type { Community, Channel, ChannelCategory, CommunityMember } from '@nexus/types';
+import { db, isFirebaseConfigured } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface CommunityState {
   communities: Community[];
@@ -16,13 +18,14 @@ interface CommunityState {
   activeChannel: Channel | null;
   members: CommunityMember[];
 
+  initCommunitiesListener: () => () => void;
   setCommunities: (communities: Community[]) => void;
   setActiveCommunity: (community: Community | null) => void;
   setActiveChannel: (channel: Channel | null) => void;
   joinCommunity: (communityId: string) => void;
   leaveCommunity: (communityId: string) => void;
   updateChannel: (channelId: string, updates: Partial<Channel>) => void;
-  addCommunity: (community: Community) => void;
+  addCommunity: (community: Community) => Promise<void>;
 }
 
 const INITIAL_MEMBERS: CommunityMember[] = [CURRENT_USER, ...MOCK_USERS].slice(0, 12).map((user, i) => ({
@@ -38,7 +41,7 @@ const INITIAL_MEMBERS: CommunityMember[] = [CURRENT_USER, ...MOCK_USERS].slice(0
 
 export const useCommunityStore = create<CommunityState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       communities: MOCK_COMMUNITIES,
       joinedCommunityIds: ['community-1', 'community-2', 'community-4', 'community-5'],
       activeCommunity: MOCK_COMMUNITIES[0],
@@ -46,51 +49,97 @@ export const useCommunityStore = create<CommunityState>()(
       activeChannel: MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null,
       members: INITIAL_MEMBERS,
 
-  setCommunities: (communities) => set({ communities }),
+      initCommunitiesListener: () => {
+        if (!isFirebaseConfigured() || !db) {
+          return () => {};
+        }
 
-  setActiveCommunity: (community) => {
-    set({
-      activeCommunity: community,
-      categories: community ? MOCK_CHANNEL_CATEGORIES : [],
-      activeChannel: community ? (MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null) : null,
-    });
-  },
+        try {
+          const communitiesCol = collection(db, 'communities');
+          const unsubscribe = onSnapshot(communitiesCol, (snapshot) => {
+            if (!snapshot.empty) {
+              const remoteCommunities: Community[] = [];
+              snapshot.forEach((docSnap) => {
+                const data = docSnap.data() as Community;
+                remoteCommunities.push({ ...data, id: docSnap.id });
+              });
 
-  setActiveChannel: (channel) => set({ activeChannel: channel }),
+              // Merge remote communities with default mock communities (avoiding duplicate IDs)
+              const existingIds = new Set(remoteCommunities.map((c) => c.id));
+              const merged = [
+                ...remoteCommunities,
+                ...MOCK_COMMUNITIES.filter((c) => !existingIds.has(c.id)),
+              ];
 
-  joinCommunity: (communityId) => {
-    set((state) => ({
-      joinedCommunityIds: state.joinedCommunityIds.includes(communityId)
-        ? state.joinedCommunityIds
-        : [...state.joinedCommunityIds, communityId],
-    }));
-  },
+              set({ communities: merged });
+            }
+          });
 
-  leaveCommunity: (communityId) => {
-    set((state) => ({
-      joinedCommunityIds: state.joinedCommunityIds.filter((id) => id !== communityId),
-    }));
-  },
+          return unsubscribe;
+        } catch (err) {
+          console.warn('Communities listener error:', err);
+          return () => {};
+        }
+      },
 
-  updateChannel: (channelId, updates) => {
-    set((state) => ({
-      categories: state.categories.map((cat) => ({
-        ...cat,
-        channels: cat.channels.map((ch) =>
-          ch.id === channelId ? { ...ch, ...updates } : ch
-        ),
-      })),
-    }));
-  },
+      setCommunities: (communities) => set({ communities }),
 
-  addCommunity: (community) => {
-    set((state) => ({
-      communities: [community, ...state.communities],
-      joinedCommunityIds: [community.id, ...state.joinedCommunityIds],
-      activeCommunity: community,
-    }));
-  },
-}),
+      setActiveCommunity: (community) => {
+        set({
+          activeCommunity: community,
+          categories: community ? MOCK_CHANNEL_CATEGORIES : [],
+          activeChannel: community ? (MOCK_CHANNEL_CATEGORIES[0]?.channels[2] ?? null) : null,
+        });
+      },
+
+      setActiveChannel: (channel) => set({ activeChannel: channel }),
+
+      joinCommunity: (communityId) => {
+        set((state) => ({
+          joinedCommunityIds: state.joinedCommunityIds.includes(communityId)
+            ? state.joinedCommunityIds
+            : [...state.joinedCommunityIds, communityId],
+        }));
+      },
+
+      leaveCommunity: (communityId) => {
+        set((state) => ({
+          joinedCommunityIds: state.joinedCommunityIds.filter((id) => id !== communityId),
+        }));
+      },
+
+      updateChannel: (channelId, updates) => {
+        set((state) => ({
+          categories: state.categories.map((cat) => ({
+            ...cat,
+            channels: cat.channels.map((ch) =>
+              ch.id === channelId ? { ...ch, ...updates } : ch
+            ),
+          })),
+        }));
+      },
+
+      addCommunity: async (community) => {
+        // Optimistic local state update
+        set((state) => ({
+          communities: [community, ...state.communities.filter((c) => c.id !== community.id)],
+          joinedCommunityIds: [community.id, ...state.joinedCommunityIds],
+          activeCommunity: community,
+        }));
+
+        // Cloud Firestore sync
+        if (isFirebaseConfigured() && db) {
+          try {
+            await setDoc(doc(db, 'communities', community.id), {
+              ...community,
+              updatedAt: serverTimestamp(),
+            });
+          } catch (err) {
+            console.warn('Failed to sync community to Firestore:', err);
+          }
+        }
+      },
+    }),
     {
       name: 'nexus-community-store',
       partialize: (state) => ({

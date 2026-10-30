@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Sparkles, Hash, Globe, Check } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useCommunityStore } from '@/stores/community-store';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Community } from '@nexus/types';
 
 const CATEGORIES = [
@@ -23,6 +24,7 @@ export function CreateCommunityModal() {
   const router = useRouter();
   const { createCommunityModalOpen, closeCreateCommunityModal } = useUiStore();
   const { addCommunity } = useCommunityStore();
+  const { user } = useAuthStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -56,7 +58,7 @@ export function CreateCommunityModal() {
       requiresApproval: false,
       hasNSFW: false,
       inviteCode: `nexus-${Math.random().toString(36).substring(2, 7)}`,
-      ownerId: 'usr-current',
+      ownerId: user?.id || 'usr-current',
       createdAt: new Date().toISOString(),
     };
 

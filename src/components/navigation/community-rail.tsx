@@ -155,6 +155,7 @@ export function CommunityRail() {
 
   const { communities, joinedCommunityIds } = useCommunityStore();
   const { openCreateCommunityModal } = useUiStore();
+  const { user } = useAuthStore();
 
   const joinedCommunities = communities.filter((c) =>
     joinedCommunityIds.includes(c.id)
@@ -248,18 +249,21 @@ export function CommunityRail() {
       </Tooltip>
 
       {/* User avatar */}
-      <Tooltip label={`${MOCK_CURRENT_USER.displayName} — ${MOCK_CURRENT_USER.status}`}>
+      <Tooltip label={`${user?.displayName || user?.username || 'You'} — ${user?.status || 'online'}`}>
         <div className="relative group">
           <button
             onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
             onClick={() => router.push('/profile/me')}
-            className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full transition-all duration-150 group-hover:rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            style={{ backgroundColor: MOCK_CURRENT_USER.avatarColor }}
-            aria-label={`${MOCK_CURRENT_USER.displayName} — right-click for options`}
+            className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full transition-all duration-150 group-hover:rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 bg-indigo-600"
+            aria-label={`${user?.displayName || user?.username || 'You'} — right-click for options`}
           >
-            <span className="text-sm font-bold text-white">{MOCK_CURRENT_USER.initials}</span>
+            {user?.avatar ? (
+              <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-white">{(user?.displayName || user?.username || 'You').slice(0, 2).toUpperCase()}</span>
+            )}
           </button>
-          <StatusDot status={MOCK_CURRENT_USER.status} />
+          <StatusDot status={user?.status || 'online'} />
         </div>
       </Tooltip>
 
