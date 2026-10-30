@@ -1,78 +1,42 @@
-'use client';
+﻿'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { isFirebaseConfigured, saveClientFirebaseConfig } from '@/lib/firebase';
-import { X, Sparkles, Database, CheckCircle2 } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 
 function GoogleAuthInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, loginWithGooglePopup, loginWithGoogle } = useAuthStore();
+  const { login, loginWithGooglePopup } = useAuthStore();
 
   const redirectTo = searchParams.get('redirect') ?? '/discover';
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-
-  // Quick config paste state
-  const [configText, setConfigText] = useState('');
 
   const handleGoogleClick = async () => {
     setErrorMsg(null);
     setLoading(true);
 
-    if (isFirebaseConfigured()) {
-      try {
-        const user = await loginWithGooglePopup();
-        if (user) {
-          router.push(redirectTo);
-        }
-      } catch (err: any) {
-        console.error('Google popup error:', err);
-        setErrorMsg(err?.message || 'Google sign-in popup was closed or failed.');
-        setLoading(false);
-      }
-    } else {
-      setLoading(false);
-      setShowConfigModal(true);
-    }
-  };
-
-  const handleQuickAccountSelect = async (accountName: string, accountEmail: string) => {
-    setLoading(true);
-    await loginWithGoogle({
-      email: accountEmail,
-      name: accountName,
-      avatar: `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(accountName)}&backgroundColor=6366f1`,
-    });
-    router.push(redirectTo);
-  };
-
-  const handleSaveFirebaseConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!configText.trim()) return;
-
     try {
-      // Parse JSON or JavaScript object format from Firebase Console
-      let jsonStr = configText.trim();
-      if (jsonStr.startsWith('const firebaseConfig =') || jsonStr.startsWith('var firebaseConfig =')) {
-        jsonStr = jsonStr.replace(/^(const|var|let)\s+firebaseConfig\s*=\s*/, '').replace(/;\s*$/, '');
+      const user = await loginWithGooglePopup();
+      if (user) {
+        router.push(redirectTo);
       }
-      // Replace unquoted keys
-      const formatted = jsonStr.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
-      const parsed = JSON.parse(formatted);
-
-      if (parsed.apiKey && parsed.projectId) {
-        saveClientFirebaseConfig(parsed);
+    } catch (err: any) {
+      console.error('Google popup error:', err);
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Sign-in cancelled. Please click "Continue with Google" again.');
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Domain not authorized in Firebase Console. Please add your Vercel URL to Authorized Domains in Firebase.');
+      } else if (err?.code === 'auth/operation-not-allowed') {
+        setErrorMsg('Google sign-in is not enabled in Firebase Console. Please enable Google provider in Authentication.');
       } else {
-        setErrorMsg('Invalid config format. Please make sure apiKey and projectId are present.');
+        setErrorMsg(err?.message || 'Google sign-in failed. Please try again.');
       }
-    } catch {
-      setErrorMsg('Could not parse config. Please paste a valid Firebase config object.');
+      setLoading(false);
     }
   };
 
@@ -81,6 +45,7 @@ function GoogleAuthInner() {
     if (!email.trim()) return;
 
     setLoading(true);
+    setErrorMsg(null);
     try {
       await login(email.trim());
       router.push(redirectTo);
@@ -100,47 +65,33 @@ function GoogleAuthInner() {
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center bg-[#090a0d] overflow-hidden font-sans px-4 select-none">
-      {/* ── Background Simulated App UI ── */}
-      <div className="absolute inset-0 pointer-events-none opacity-40 blur-[2px] flex flex-col">
+      {/* Background Simulated App UI */}
+      <div className="absolute inset-0 pointer-events-none opacity-30 blur-[2px] flex flex-col">
         <div className="h-14 border-b border-white/5 bg-[#121316] flex items-center justify-between px-8">
           <div className="flex items-center gap-6">
             <span className="font-bold text-white tracking-wider text-sm">Nexus Community</span>
-            <div className="flex gap-4 text-xs text-neutral-400">
-              <span>Explore</span>
-              <span>Channels</span>
-              <span>Events</span>
-              <span>Pricing</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="h-8 px-4 rounded-lg bg-neutral-800 text-xs text-neutral-300 flex items-center">
-              Sign In
-            </div>
           </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-3xl mx-auto space-y-4">
           <div className="text-3xl font-bold text-neutral-300">
-            Nexus: Advanced Real-time Community & Chat Platform
-          </div>
-          <div className="text-sm text-neutral-500 max-w-lg">
-            Connect, collaborate, and chat in high-fidelity voice and text channels with friends and teammates.
+            Nexus: Real-time Community & Chat Platform
           </div>
         </div>
       </div>
 
       {/* Dark overlay backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
-      {/* ── Main Modal Dialog ── */}
+      {/* Main Modal Dialog matching modern AI / Nano Banana dark style */}
       <div
-        className="relative z-10 w-full max-w-[400px] rounded-2xl bg-[#141518] border border-[#27272a] shadow-2xl p-7 text-white"
+        className="relative z-10 w-full max-w-[420px] rounded-2xl bg-[#141518] border border-[#27272a] shadow-2xl p-7 text-white"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button 'X' */}
         <button
           onClick={handleClose}
           aria-label="Close"
-          className="absolute top-4 right-4 text-neutral-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5 cursor-pointer"
+          className="absolute top-4 right-4 text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
         >
           <X size={18} />
         </button>
@@ -152,8 +103,9 @@ function GoogleAuthInner() {
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center">
-            {errorMsg}
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2 text-left">
+            <AlertCircle size={15} className="text-red-400 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{errorMsg}</span>
           </div>
         )}
 
@@ -225,100 +177,6 @@ function GoogleAuthInner() {
             )}
           </button>
         </form>
-
-        {/* ── Sub-Modal: Real Account Chooser & Firebase Connect ── */}
-        {showConfigModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-100">
-            <div
-              className="w-full max-w-md rounded-2xl bg-[#18191d] border border-[#2f3037] shadow-2xl p-6 text-white space-y-5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-indigo-400" />
-                  <span className="font-semibold text-sm">Choose Your Google Account</span>
-                </div>
-                <button onClick={() => setShowConfigModal(false)} className="text-neutral-400 hover:text-white cursor-pointer">
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* 1. Quick Select Real Accounts */}
-              <div>
-                <p className="text-xs text-neutral-400 mb-2.5 font-medium">
-                  Select your Google profile to sign in instantly:
-                </p>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickAccountSelect('Krushna Bankar', 'krushnabankar31@gmail.com')}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all text-left cursor-pointer group"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      KB
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-white">Krushna Bankar</div>
-                      <div className="text-[11px] text-neutral-400 truncate">krushnabankar31@gmail.com</div>
-                    </div>
-                    <CheckCircle2 size={16} className="text-emerald-400" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickAccountSelect('Karan More', 'karanmore11ar@gmail.com')}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all text-left cursor-pointer group"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      KM
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-white">Karan More</div>
-                      <div className="text-[11px] text-neutral-400 truncate">karanmore11ar@gmail.com</div>
-                    </div>
-                    <CheckCircle2 size={16} className="text-emerald-400" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. Connect Live Firebase Project for Native Popup & Real-Time Sync */}
-              <div className="pt-3 border-t border-white/5">
-                <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-neutral-200">
-                  <Database size={14} className="text-amber-400" />
-                  <span>Connect Live Firebase for Multi-user Real-time Sync</span>
-                </div>
-                <p className="text-[11px] text-neutral-400 mb-2.5 leading-relaxed">
-                  To trigger Google's native popup across the internet, paste your Firebase web config from your Firebase Console:
-                </p>
-                <form onSubmit={handleSaveFirebaseConfig} className="space-y-2">
-                  <textarea
-                    rows={3}
-                    value={configText}
-                    onChange={(e) => setConfigText(e.target.value)}
-                    placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }'
-                    className="w-full bg-[#111215] border border-[#2e2f36] rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 font-mono resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowConfigModal(false)}
-                      className="flex-1 py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-neutral-300 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!configText.trim()}
-                      className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-xs text-white font-semibold transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      Save & Activate Firebase
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
