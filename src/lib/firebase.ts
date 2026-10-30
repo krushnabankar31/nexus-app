@@ -12,7 +12,7 @@ export interface FirebaseConfig {
 }
 
 const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: 'AIzaSyBNES2RjR4TLYQewz2PCBdoy-KGWwF6zoU',
+  apiKey: 'AIzaSyBNEs2RjR4TlYQewz2PCBdoy-KGWWF6zoU',
   authDomain: 'nexus-app-6193e.firebaseapp.com',
   projectId: 'nexus-app-6193e',
   storageBucket: 'nexus-app-6193e.firebasestorage.app',
