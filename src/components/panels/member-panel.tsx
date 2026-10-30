@@ -1,11 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Search, ChevronDown, Crown, Shield, Circle } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useCommunityStore } from '@/stores/community-store';
-
-type MemberGroup = { label: string; color: string; members: typeof import('@/lib/mock-data')['MOCK_USERS'] };
+import { useAuthStore } from '@/stores/auth-store';
 
 const STATUS_CONFIG = {
   online: { color: 'bg-green-400', label: 'Online' },
@@ -16,40 +15,67 @@ const STATUS_CONFIG = {
 
 export function MemberPanel() {
   const { members, activeCommunity } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
   const [search, setSearch] = useState('');
 
-  const filtered = members.filter((m) => {
+  // Use real Firestore members, with current logged-in user fallback
+  const displayMembers =
+    members.length > 0
+      ? members
+      : currentUser
+      ? [
+          {
+            userId: currentUser.id,
+            communityId: activeCommunity?.id || 'main',
+            nickname: null,
+            roles: [
+              {
+                id: 'role-admin',
+                communityId: 'main',
+                name: 'Admin',
+                color: '#ef4444',
+                icon: null,
+                position: 100,
+                isDefault: false,
+                isMentionable: true,
+                isHoisted: true,
+                permissions: ['administrator' as const],
+              },
+            ],
+            joinedAt: currentUser.createdAt || new Date().toISOString(),
+            user: currentUser,
+          },
+        ]
+      : [];
+
+  const filtered = displayMembers.filter((m) => {
     if (!m.user) return false;
     const q = search.toLowerCase();
-    return m.user.displayName.toLowerCase().includes(q) || m.user.username.toLowerCase().includes(q);
+    const name = m.user.displayName || m.user.username || '';
+    return name.toLowerCase().includes(q) || (m.user.username || '').toLowerCase().includes(q);
   });
 
   const online = filtered.filter((m) => m.user?.status !== 'offline');
   const offline = filtered.filter((m) => m.user?.status === 'offline');
 
-  const ROLE_GROUPS: { label: string; color: string; roleId: string }[] = [
-    { label: 'Admins', color: '#ef4444', roleId: 'role-admin' },
-    { label: 'Moderators', color: '#f59e0b', roleId: 'role-mod' },
-    { label: 'Members', color: '#6b7280', roleId: 'role-member' },
-  ];
-
-  function MemberRow({ member }: { member: (typeof members)[0] }) {
+  function MemberRow({ member }: { member: (typeof displayMembers)[0] }) {
     const user = member.user;
     if (!user) return null;
-    const statusCfg = STATUS_CONFIG[user.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.offline;
+    const statusCfg = STATUS_CONFIG[user.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.online;
     const topRole = member.roles[0];
     const isAdmin = topRole?.name === 'Admin';
     const isMod = topRole?.name === 'Moderator';
+    const displayName = user.displayName || user.username || 'User';
 
     return (
-      <button className="group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/8 transition-colors">
+      <button className="group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/8 transition-colors text-left">
         {/* Avatar */}
         <div className="relative shrink-0">
           {user.avatar ? (
-            <img src={user.avatar} alt={user.displayName} className="h-8 w-8 rounded-full object-cover" />
+            <img src={user.avatar} alt={displayName} className="h-8 w-8 rounded-full object-cover" />
           ) : (
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
-              {getInitials(user.displayName)}
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+              {getInitials(displayName)}
             </div>
           )}
           {/* Status dot */}
@@ -62,16 +88,12 @@ export function MemberPanel() {
         <div className="flex min-w-0 flex-col items-start">
           <div className="flex items-center gap-1">
             <span className="truncate text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
-              {user.displayName}
+              {displayName}
             </span>
             {isAdmin && <Crown className="h-3 w-3 text-amber-400 shrink-0" />}
             {isMod && !isAdmin && <Shield className="h-3 w-3 text-blue-400 shrink-0" />}
           </div>
-          {user.status === 'online' && user.activity ? (
-            <span className="truncate text-xs text-gray-500 max-w-[120px]">{user.activity}</span>
-          ) : (
-            <span className="text-xs text-gray-600 capitalize">{user.status}</span>
-          )}
+          <span className="text-xs text-gray-500 capitalize">{user.status || 'online'}</span>
         </div>
 
         {/* Role color indicator */}
@@ -82,7 +104,15 @@ export function MemberPanel() {
     );
   }
 
-  function GroupSection({ label, color, members: groupMembers }: { label: string; color: string; members: typeof members }) {
+  function GroupSection({
+    label,
+    color,
+    members: groupMembers,
+  }: {
+    label: string;
+    color: string;
+    members: typeof displayMembers;
+  }) {
     const [collapsed, setCollapsed] = useState(false);
     if (groupMembers.length === 0) return null;
     return (
@@ -98,7 +128,9 @@ export function MemberPanel() {
         </button>
         {!collapsed && (
           <div className="space-y-0.5 pb-2">
-            {groupMembers.map((m) => <MemberRow key={m.userId} member={m} />)}
+            {groupMembers.map((m) => (
+              <MemberRow key={m.userId} member={m} />
+            ))}
           </div>
         )}
       </div>
@@ -115,10 +147,10 @@ export function MemberPanel() {
       {/* Header */}
       <div className="p-4 pb-2">
         <h3 className="mb-2 text-sm font-bold text-gray-200">
-          Members <span className="text-gray-500 font-normal">— {activeCommunity?.memberCount?.toLocaleString() ?? members.length}</span>
+          Members <span className="text-gray-500 font-normal">— {displayMembers.length}</span>
         </h3>
         {/* Search */}
-        <div className="flex items-center gap-2 rounded-xl bg-white/8 px-3 py-2 border border-white/10 focus-within:border-brand-500/40 transition-colors">
+        <div className="flex items-center gap-2 rounded-xl bg-white/8 px-3 py-2 border border-white/10 focus-within:border-indigo-500/40 transition-colors">
           <Search className="h-3.5 w-3.5 text-gray-500 shrink-0" />
           <input
             type="text"
@@ -134,7 +166,11 @@ export function MemberPanel() {
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-2 scrollbar-thin scrollbar-thumb-white/10">
         <GroupSection label="Admins" color="#ef4444" members={adminMembers} />
         <GroupSection label="Moderators" color="#f59e0b" members={modMembers} />
-        <GroupSection label="Members Online" color="#6b7280" members={regularMembers.filter((m) => m.user?.status !== 'offline')} />
+        <GroupSection
+          label="Members Online"
+          color="#6b7280"
+          members={regularMembers.filter((m) => m.user?.status !== 'offline')}
+        />
         <GroupSection label="Offline" color="#4b5563" members={offlineMembers} />
       </div>
 
@@ -145,7 +181,7 @@ export function MemberPanel() {
             <Circle className="h-2 w-2 fill-green-400 text-green-400" />
             <span>{online.length} online</span>
           </div>
-          <span>{members.length} total</span>
+          <span>{displayMembers.length} total</span>
         </div>
       </div>
     </aside>

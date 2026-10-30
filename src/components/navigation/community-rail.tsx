@@ -8,7 +8,7 @@ import {
   MessageCircle, Compass, Plus, Settings, LogOut,
   UserCircle, Bell, BellOff, Moon, Shield,
 } from 'lucide-react';
-import { MOCK_CURRENT_USER } from '@/lib/mock-data';
+
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore } from '@/stores/community-store';
 import { useUiStore } from '@/stores/ui-store';

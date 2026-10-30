@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,13 +9,14 @@ import AppLayout from '@/components/layout/app-layout';
 export default function AppRootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, initAuthListener } = useAuthStore();
-  const { initCommunitiesListener } = useCommunityStore();
+  const { initCommunitiesListener, initMembersListener } = useCommunityStore();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     const unsubAuth = initAuthListener();
     const unsubCommunities = initCommunitiesListener();
+    const unsubMembers = initMembersListener();
 
     if (!isAuthenticated) {
       router.push('/login');
@@ -24,8 +25,9 @@ export default function AppRootLayout({ children }: { children: React.ReactNode 
     return () => {
       unsubAuth();
       unsubCommunities();
+      unsubMembers();
     };
-  }, [isAuthenticated, router, initAuthListener, initCommunitiesListener]);
+  }, [isAuthenticated, router, initAuthListener, initCommunitiesListener, initMembersListener]);
 
   if (!isMounted || !isAuthenticated) {
     return (
