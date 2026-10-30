@@ -12,12 +12,7 @@ import {
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore, getDefaultCategories } from '@/stores/community-store';
-import {
-  
-  
-  MOCK_DMS,
-  MOCK_CURRENT_USER,
-} from '@/lib/mock-data';
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ChannelType = 'text' | 'voice' | 'announcement' | 'forum' | 'video' | 'stage';
@@ -254,32 +249,14 @@ export function ChannelSidebar() {
           <div className="py-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
             Direct Messages
           </div>
-          {MOCK_DMS.map((dm) => (
-            <button
-              key={dm.id}
-              onClick={() => router.push(`/messages/${dm.id}`)}
-              className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200"
-            >
-              <div className="relative flex-shrink-0">
-                <div className="w-8 h-8 rounded-full bg-brand-500/30 flex items-center justify-center text-xs font-bold text-white">
-                  {dm.recipientName?.slice(0, 2).toUpperCase() ?? '??'}
-                </div>
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[hsl(var(--bg-raised))]"
-                  style={{ backgroundColor: STATUS_COLORS[dm.recipientStatus ?? 'offline'] }}
-                />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="truncate text-sm font-medium">{dm.recipientName}</div>
-                <div className="text-[11px] text-slate-500 truncate">{dm.lastMessage}</div>
-              </div>
-              {(dm.unreadCount ?? 0) > 0 && (
-                <span className="flex-shrink-0 h-5 w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
-                  {dm.unreadCount}
-                </span>
-              )}
-            </button>
-          ))}
+          {/* No real DMs yet — show empty state */}
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+            <div className="w-10 h-10 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
+              <Users size={18} className="text-brand-400" />
+            </div>
+            <p className="text-xs text-slate-500">No conversations yet.</p>
+            <p className="text-xs text-slate-600 mt-1">Start a new message!</p>
+          </div>
         </div>
 
         <UserFooter />
