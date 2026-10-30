@@ -157,6 +157,12 @@ function Category({
 function UserFooter() {
   const router = useRouter();
   const { isMuted, isDeafened, toggleMute, toggleDeafen } = useUiStore();
+  const { user } = useAuthStore();
+
+  const displayName = user?.displayName || user?.username || 'You';
+  const avatar = user?.avatar;
+  const initials = displayName.slice(0, 2).toUpperCase();
+  const customStatus = (user as any)?.customStatus || (user as any)?.bio || 'Online';
 
   return (
     <div className="flex-shrink-0 flex items-center gap-2 px-2 py-2 bg-[hsl(var(--bg-sunken))] border-t border-white/5">
@@ -165,17 +171,20 @@ function UserFooter() {
         className="flex items-center gap-2 flex-1 min-w-0 rounded-md p-1 hover:bg-white/5 transition-colors"
       >
         <div className="relative flex-shrink-0">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ backgroundColor: MOCK_CURRENT_USER.avatarColor }}
-          >
-            {MOCK_CURRENT_USER.initials}
-          </div>
+          {avatar ? (
+            <img src={avatar} alt={displayName} className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-indigo-600"
+            >
+              {initials}
+            </div>
+          )}
           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[hsl(var(--bg-sunken))] bg-emerald-500" />
         </div>
         <div className="min-w-0 text-left">
-          <div className="text-sm font-semibold text-white truncate">{MOCK_CURRENT_USER.displayName}</div>
-          <div className="text-[10px] text-slate-500 truncate">{MOCK_CURRENT_USER.customStatus ?? 'Online'}</div>
+          <div className="text-sm font-semibold text-white truncate">{displayName}</div>
+          <div className="text-[10px] text-slate-500 truncate">{customStatus}</div>
         </div>
       </button>
 
