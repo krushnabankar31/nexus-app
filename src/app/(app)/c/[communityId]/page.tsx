@@ -3,17 +3,17 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  Hash, Volume2, Megaphone, BookOpen, Calendar, Pin,
+  Hash, Volume2, BookOpen, Pin,
   ArrowRight, Users, Shield, Zap, ChevronRight,
 } from 'lucide-react';
-import { cn, formatRelativeTime } from '@/lib/utils';
-import { MOCK_COMMUNITIES, MOCK_CHANNEL_CATEGORIES, MOCK_MESSAGES, MOCK_USERS, CURRENT_USER } from '@/lib/mock-data';
+import { formatRelativeTime } from '@/lib/utils';
+import { MOCK_COMMUNITIES, MOCK_MESSAGES, MOCK_USERS } from '@/lib/mock-data';
 import { useCommunityStore } from '@/stores/community-store';
 
 const PINNED_ANNOUNCEMENTS = [
   {
     id: 'a1',
-    title: '🏆 Monthly Tournament — Register Now!',
+    title: '🏆 Monthly Tournament - Register Now!',
     content: 'Our biggest Rocket League + Valorant tournament is starting next week. Prizes include Nexus Pro subscriptions and game keys. Registration closes Friday!',
     author: MOCK_USERS[1],
     time: new Date(Date.now() - 7200000).toISOString(),
@@ -22,7 +22,7 @@ const PINNED_ANNOUNCEMENTS = [
   {
     id: 'a2',
     title: '📋 Community Rules Updated',
-    content: 'We\'ve refreshed the server rules to be clearer about self-promotion and AI-generated content. Please read the updated rules pinned in #rules.',
+    content: "We've refreshed the server rules to be clearer about self-promotion and AI-generated content. Please read the updated rules pinned in #rules.",
     author: MOCK_USERS[0],
     time: new Date(Date.now() - 86400000).toISOString(),
     pinned: true,
@@ -30,7 +30,7 @@ const PINNED_ANNOUNCEMENTS = [
 ];
 
 const COMMUNITY_RULES = [
-  'Be respectful — no hate speech, harassment, or toxicity',
+  'Be respectful - no hate speech, harassment, or toxicity',
   'No spam, self-promotion, or unsolicited DMs',
   'Keep discussions in the relevant channels',
   'No spoilers without tags for recent releases',
@@ -54,11 +54,15 @@ export default function CommunityPage() {
     MOCK_COMMUNITIES.find((c) => c.id === params.communityId) ??
     MOCK_COMMUNITIES[0];
 
+  // Safety guard
+  if (!community) return null;
+
   const onlineMembers = members.filter((m) => m.user?.status !== 'offline').slice(0, 8);
-  const recentMessages = MOCK_MESSAGES.filter((m) => !m.deletedAt).slice(-5).reverse();
+  const recentMessages = MOCK_MESSAGES.filter((m) => !(m as any).deletedAt).slice(-5).reverse();
 
   const accentColor = community.accentColor ?? '#6366f1';
-  const accentGradient = `from-[${accentColor}]/30 via-[hsl(var(--bg-raised))] to-[hsl(var(--bg-raised))]`;
+  const memberCount = community.memberCount ?? 0;
+  const onlineCount = community.onlineCount ?? 0;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -66,10 +70,9 @@ export default function CommunityPage() {
       <div
         className="relative h-52 w-full flex-shrink-0 overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${community.accentColor ?? '#6366f1'}33, ${community.accentColor ?? '#8b5cf6'}22, hsl(var(--bg-raised)))`,
+          background: `linear-gradient(135deg, ${accentColor}33, ${accentColor}22, hsl(var(--bg-raised)))`,
         }}
       >
-        {/* Real banner image */}
         {(community as any).banner && (
           <img
             src={(community as any).banner}
@@ -78,11 +81,10 @@ export default function CommunityPage() {
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[hsl(var(--bg-base))] opacity-80" />
-        {/* Community info overlay at bottom */}
         <div className="absolute bottom-4 left-6 flex items-end gap-4">
           <div
             className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg ring-4 ring-[hsl(var(--bg-base))] overflow-hidden flex-shrink-0"
-            style={{ background: `${community.accentColor ?? '#6366f1'}55` }}
+            style={{ background: `${accentColor}55` }}
           >
             {community.icon && community.icon.startsWith('http') ? (
               <img src={community.icon} alt={community.name} className="h-full w-full object-cover" />
@@ -100,13 +102,18 @@ export default function CommunityPage() {
               )}
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-400">
-              <span>{community.memberCount.toLocaleString()} members</span>
+              <span>{memberCount.toLocaleString()} members</span>
               <span>·</span>
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-400" />{community.onlineCount.toLocaleString()} online
+                <span className="h-2 w-2 rounded-full bg-green-400" />
+                {onlineCount.toLocaleString()} online
               </span>
-              <span>·</span>
-              <span className="capitalize">{community.category}</span>
+              {community.category && (
+                <>
+                  <span>·</span>
+                  <span className="capitalize">{community.category}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -197,7 +204,7 @@ export default function CommunityPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold text-white">{msg.author.displayName}</span>
+                      <span className="text-xs font-semibold text-white">{msg.author.displayName}</span>
                       <span className="text-[10px] text-gray-500">in #general · {formatRelativeTime(msg.createdAt)}</span>
                     </div>
                     <p className="text-sm text-gray-300 truncate">{msg.content}</p>
@@ -269,8 +276,8 @@ export default function CommunityPage() {
             <h3 className="mb-3 font-bold text-white">Stats</h3>
             <div className="space-y-2.5">
               {[
-                ['Members', (community.memberCount ?? 1).toLocaleString()],
-                ['Online Now', (community.onlineCount ?? 1).toLocaleString()],
+                ['Members', memberCount.toLocaleString()],
+                ['Online Now', onlineCount.toLocaleString()],
                 ['Category', community.category ? (community.category.charAt(0).toUpperCase() + community.category.slice(1)) : 'General'],
                 ['Created', community.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'],
               ].map(([label, val]) => (
