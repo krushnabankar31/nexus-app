@@ -1,17 +1,16 @@
 'use client';
 
-import { MessageSquare, Search, Plus, Phone, Video } from 'lucide-react';
+import { MessageSquare, Plus, Search, Users } from 'lucide-react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { MOCK_DMS, MOCK_CURRENT_USER } from '@/lib/mock-data';
 
 export default function MessagesPage() {
-  const router = useRouter();
   const [search, setSearch] = useState('');
 
-  const filtered = MOCK_DMS.filter((dm) =>
-    dm.recipientName.toLowerCase().includes(search.toLowerCase())
-  );
+  // No real DMs exist yet — Firestore DM listener will be added in a future update.
+  // For now show a clean empty state (no fake/mock data).
+  const dms: never[] = [];
+
+  const filtered = dms.filter(() => true); // placeholder for real filter later
 
   return (
     <div className="flex h-full">
@@ -39,41 +38,19 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* DM list */}
-        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-          {filtered.map((dm) => (
-            <button
-              key={dm.id}
-              onClick={() => router.push(`/messages/${dm.id}`)}
-              className="group w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/5"
-            >
-              <div className="relative flex-shrink-0">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-sm font-bold text-white">
-                  {dm.recipientName.slice(0, 1).toUpperCase()}
-                </div>
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[hsl(var(--bg-raised))]"
-                  style={{
-                    backgroundColor:
-                      dm.recipientStatus === 'online' ? '#22c55e' :
-                      dm.recipientStatus === 'idle'   ? '#f59e0b' :
-                      dm.recipientStatus === 'dnd'    ? '#ef4444' : '#6b7280',
-                  }}
-                />
+        {/* DM list — empty state */}
+        <div className="flex-1 overflow-y-auto px-2 py-1">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
+                <Users size={20} className="text-brand-400" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className={`truncate text-sm ${dm.unreadCount > 0 ? 'font-semibold text-white' : 'font-medium text-slate-300'}`}>
-                  {dm.recipientName}
-                </div>
-                <div className="text-xs text-slate-500 truncate">{dm.lastMessage}</div>
-              </div>
-              {dm.unreadCount > 0 && (
-                <span className="flex-shrink-0 h-5 w-5 flex items-center justify-center rounded-full bg-brand-500 text-white text-[10px] font-bold">
-                  {dm.unreadCount}
-                </span>
-              )}
-            </button>
-          ))}
+              <p className="text-sm text-slate-400 font-medium">No conversations yet</p>
+              <p className="text-xs text-slate-600 mt-1">
+                Start a new message to connect with community members.
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
 
