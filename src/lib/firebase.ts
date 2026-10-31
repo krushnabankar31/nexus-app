@@ -1,6 +1,6 @@
-﻿import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 
 export interface FirebaseConfig {
   apiKey?: string;
@@ -74,7 +74,11 @@ if (typeof window !== 'undefined') {
     try {
       app = getApps().length === 0 ? initializeApp(config as Record<string, string>) : getApp();
       auth = getAuth(app);
-      db = getFirestore(app);
+      try {
+        db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+      } catch {
+        db = getFirestore(app);
+      }
       googleProvider = new GoogleAuthProvider();
       googleProvider.setCustomParameters({ prompt: 'select_account' });
     } catch (err) {

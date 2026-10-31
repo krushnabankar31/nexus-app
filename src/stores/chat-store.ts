@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { MOCK_MESSAGES, CURRENT_USER } from '@/lib/mock-data';
 import type { Message, User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import {
@@ -9,7 +8,6 @@ import {
   updateDoc,
   onSnapshot,
   query,
-  orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
 
@@ -37,14 +35,9 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
-  messages: {
-    'ch_general': MOCK_MESSAGES,
-    'ch-3': MOCK_MESSAGES,
-  },
+  messages: {},
   typingUsers: {},
-  pinnedMessages: {
-    'ch_general': MOCK_MESSAGES.filter((m) => m.isPinned),
-  },
+  pinnedMessages: {},
   activeThread: null,
   threads: {},
   activeSubscriptions: {},
@@ -52,9 +45,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   loadMessages: (channelId) => {
     const { messages, subscribeToChannel, activeSubscriptions } = get();
     if (!messages[channelId]) {
-      const seed = channelId === 'ch_general' || channelId === 'ch-3' ? MOCK_MESSAGES : [];
       set((state) => ({
-        messages: { ...state.messages, [channelId]: seed },
+        messages: { ...state.messages, [channelId]: [] },
       }));
     }
 
@@ -73,19 +65,56 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     try {
       const messagesRef = collection(db, 'channels', channelId, 'messages');
-      const q = query(messagesRef, orderBy('createdAt', 'asc'));
+      const q = query(messagesRef);
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
           const remoteMsgs: Message[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
+            let createdAtStr = new Date().toISOString();
+            if (data.createdAt?.toDate) {
+              createdAtStr = data.createdAt.toDate().toISOString();
+            } else if (data.createdAtIso) {
+              createdAtStr = data.createdAtIso;
+            } else if (typeof data.createdAt === 'string') {
+              createdAtStr = data.createdAt;
+            }
+
             remoteMsgs.push({
-              ...(data as Message),
               id: docSnap.id,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
-            });
+              channelId: data.channelId || channelId,
+              communityId: data.communityId || '',
+              authorId: data.authorId || data.author?.id || '',
+              author: data.author || {
+                id: data.authorId || 'unknown',
+                displayName: 'User',
+                username: 'user',
+                avatar: '',
+                status: 'online',
+              },
+              content: data.content || '',
+              type: data.type || 'text',
+              isPinned: Boolean(data.isPinned),
+              isEdited: Boolean(data.isEdited),
+              editedAt: data.editedAt || null,
+              deletedAt: data.deletedAt || null,
+              replyToId: data.replyToId || null,
+              replyTo: data.replyTo || undefined,
+              threadId: data.threadId || null,
+              reactions: Array.isArray(data.reactions) ? data.reactions : [],
+              attachments: Array.isArray(data.attachments) ? data.attachments : [],
+              embeds: Array.isArray(data.embeds) ? data.embeds : [],
+              mentions: Array.isArray(data.mentions) ? data.mentions : [],
+              createdAt: createdAtStr,
+            } as Message);
           });
+
+          // Sort messages chronologically
+          remoteMsgs.sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
 
           set((state) => ({
             messages: {
@@ -93,8 +122,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               [channelId]: remoteMsgs,
             },
           }));
+        },
+        (error) => {
+          console.error('Channel messages onSnapshot error for', channelId, error);
         }
-      });
+      );
 
       return unsubscribe;
     } catch (err) {
@@ -104,7 +136,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   addMessage: async (channelId, msg) => {
-    // Optimistic UI update
+    // 1. Optimistic UI update
     set((state) => ({
       messages: {
         ...state.messages,
@@ -112,16 +144,51 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       },
     }));
 
-    // Sync to Firestore
+    // 2. Sync clean payload to Firestore (no undefined fields)
     if (isFirebaseConfigured() && db) {
       try {
         const msgDocRef = doc(db, 'channels', channelId, 'messages', msg.id);
-        await setDoc(msgDocRef, {
-          ...msg,
+        const payload: Record<string, any> = {
+          id: msg.id,
+          channelId,
+          communityId: msg.communityId || '',
+          authorId: msg.authorId || msg.author?.id || '',
+          author: {
+            id: msg.author?.id || '',
+            displayName: msg.author?.displayName || 'User',
+            username: msg.author?.username || 'user',
+            avatar: msg.author?.avatar || '',
+            status: msg.author?.status || 'online',
+          },
+          content: msg.content,
+          type: msg.type || 'text',
+          isPinned: Boolean(msg.isPinned),
+          isEdited: Boolean(msg.isEdited),
+          editedAt: msg.editedAt || null,
+          deletedAt: msg.deletedAt || null,
+          reactions: msg.reactions || [],
+          attachments: msg.attachments || [],
+          mentions: msg.mentions || [],
           createdAt: serverTimestamp(),
-        });
+          createdAtIso: msg.createdAt || new Date().toISOString(),
+        };
+
+        if (msg.replyToId) {
+          payload.replyToId = msg.replyToId;
+        }
+        if (msg.replyTo) {
+          payload.replyTo = {
+            id: msg.replyTo.id,
+            content: msg.replyTo.content,
+            author: {
+              displayName: msg.replyTo.author?.displayName || 'User',
+            },
+          };
+        }
+
+        await setDoc(msgDocRef, payload);
       } catch (err) {
-        console.warn('Error saving message to Firestore:', err);
+        console.error('CRITICAL: Error saving message to Firestore:', err);
       }
     }
   },
@@ -170,7 +237,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   addReaction: async (channelId, msgId, emoji, userId) => {
-    const currentUserId = userId || CURRENT_USER.id;
+    const currentUserId = userId || 'user';
     let updatedReactions: Message['reactions'] = [];
 
     set((state) => ({
@@ -207,7 +274,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   removeReaction: async (channelId, msgId, emoji, userId) => {
-    const currentUserId = userId || CURRENT_USER.id;
+    const currentUserId = userId || 'user';
     let updatedReactions: Message['reactions'] = [];
 
     set((state) => ({

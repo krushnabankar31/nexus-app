@@ -3,21 +3,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  Hash, Pin, Search, Users, HelpCircle, PlusCircle,
-  Smile, Send, Reply, MoreHorizontal, Trash2, Edit3,
+  Hash, Pin, Search, Users, PlusCircle,
+  Smile, Send, Reply, MoreHorizontal, Trash2,
   Bold, Italic, Code2, LinkIcon, List, X, ChevronRight,
-  ThumbsUp, Heart, Laugh, Zap, Frown, Mic,
 } from 'lucide-react';
 import { cn, formatTime, formatDate, generateId, getInitials } from '@/lib/utils';
 import { useChatStore } from '@/stores/chat-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
 import { useCommunityStore } from '@/stores/community-store';
-import { MOCK_CHANNEL_CATEGORIES, CURRENT_USER } from '@/lib/mock-data';
 import type { Message } from '@nexus/types';
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '⚡', '😢', '🎮'];
-const EMOJI_GRID = ['😀','😂','😍','🥰','😎','🤔','😴','🤯','👍','❤️','🔥','⚡','🎮','🏆','✨','💫','🌟','🎉','🚀','💡'];
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '🚀'];
+const EMOJI_GRID = ['😀', '😂', '😍', '😎', '🥳', '🤔', '👍', '❤️', '🔥', '🎉', '✨', '🚀', '💯', '👏', '🙏', '🙌'];
 
 function MessageBubble({
   msg,
@@ -28,11 +26,10 @@ function MessageBubble({
   isGrouped: boolean;
   channelId: string;
 }) {
-  const { addReaction, removeReaction } = useChatStore();
+  const { addReaction, removeReaction, deleteMessage } = useChatStore();
   const { user: currentUser } = useAuthStore();
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<string | null>(null);
 
   if (msg.deletedAt) {
     return (
@@ -42,7 +39,10 @@ function MessageBubble({
     );
   }
 
-  const isOwn = msg.author.id === currentUser?.id;
+  const authorName = msg.author?.displayName || msg.author?.username || 'User';
+  const authorAvatar = msg.author?.avatar;
+  const isOwn = (msg.author?.id ?? msg.authorId) === currentUser?.id;
+  const reactionsList = Array.isArray(msg.reactions) ? msg.reactions : [];
 
   return (
     <div
@@ -53,11 +53,11 @@ function MessageBubble({
       {/* Avatar / spacer */}
       {!isGrouped ? (
         <div className="h-10 w-10 shrink-0 mt-0.5">
-          {msg.author.avatar ? (
-            <img src={msg.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+          {authorAvatar ? (
+            <img src={authorAvatar} alt="" className="h-10 w-10 rounded-full object-cover" />
           ) : (
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white">
-              {getInitials(msg.author.displayName)}
+              {getInitials(authorName)}
             </div>
           )}
         </div>
@@ -74,7 +74,7 @@ function MessageBubble({
         {!isGrouped && (
           <div className="mb-1 flex items-baseline gap-2">
             <span className="font-semibold text-white text-sm hover:underline cursor-pointer">
-              {msg.author.displayName}
+              {authorName}
             </span>
             <span className="text-[11px] text-gray-500">{formatDate(msg.createdAt)}</span>
             {msg.isPinned && <Pin className="h-3 w-3 text-amber-400" />}
@@ -85,7 +85,7 @@ function MessageBubble({
         {msg.replyTo && (
           <div className="mb-1 flex items-center gap-2 text-xs text-gray-500 border-l-2 border-gray-600 pl-2">
             <Reply className="h-3 w-3 shrink-0" />
-            <span className="font-semibold">{msg.replyTo.author.displayName}:</span>
+            <span className="font-semibold">{msg.replyTo.author?.displayName || 'User'}:</span>
             <span className="truncate">{msg.replyTo.content}</span>
           </div>
         )}
@@ -112,12 +112,12 @@ function MessageBubble({
         )}
 
         {/* Reactions */}
-        {msg.reactions.length > 0 && (
+        {reactionsList.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {msg.reactions.map((r) => (
+            {reactionsList.map((r) => (
               <button
                 key={r.emoji}
-                onClick={() => r.hasReacted ? removeReaction(channelId, msg.id, r.emoji) : addReaction(channelId, msg.id, r.emoji)}
+                onClick={() => r.hasReacted ? removeReaction(channelId, msg.id, r.emoji, currentUser?.id) : addReaction(channelId, msg.id, r.emoji, currentUser?.id)}
                 className={cn(
                   'flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-all hover:scale-105',
                   r.hasReacted
@@ -131,15 +131,6 @@ function MessageBubble({
             ))}
           </div>
         )}
-
-        {/* Thread */}
-        {((msg as any).threadCount ?? (msg as any).threadReplyCount ?? 0) > 0 && (
-          <button className="mt-1 flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors">
-            <ChevronRight className="h-3.5 w-3.5" />
-            {(msg as any).threadCount ?? (msg as any).threadReplyCount}{' '}
-            {((msg as any).threadCount ?? (msg as any).threadReplyCount) === 1 ? 'reply' : 'replies'}
-          </button>
-        )}
       </div>
 
       {/* Hover actions */}
@@ -147,25 +138,16 @@ function MessageBubble({
         <div className="absolute -top-4 right-3 flex items-center gap-1 rounded-xl border border-white/10 bg-[hsl(var(--bg-overlay))] px-2 py-1 shadow-lg">
           {/* Quick reactions */}
           {QUICK_REACTIONS.slice(0, 3).map((emoji) => (
-            <button key={emoji} onClick={() => addReaction(channelId, msg.id, emoji)} className="rounded p-1 text-sm hover:bg-white/10 transition-colors">
+            <button key={emoji} onClick={() => addReaction(channelId, msg.id, emoji, currentUser?.id)} className="rounded p-1 text-sm hover:bg-white/10 transition-colors">
               {emoji}
             </button>
           ))}
           <div className="mx-1 h-4 w-px bg-white/10" />
-          <button onClick={() => {}} title="Reply" className="rounded p-1 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-            <Reply className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => {}} title="Pin" className="rounded p-1 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-            <Pin className="h-3.5 w-3.5" />
-          </button>
           {isOwn && (
-            <button onClick={() => {}} title="Delete" className="rounded p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+            <button onClick={() => deleteMessage(channelId, msg.id)} title="Delete" className="rounded p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
-          <button onClick={() => {}} title="More" className="rounded p-1 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
         </div>
       )}
     </div>
@@ -195,8 +177,8 @@ export default function ChannelPage() {
   const channelId = params.channelId ?? 'ch_general';
   const communityId = params.communityId;
 
-  const { categories, activeCommunity } = useCommunityStore();
-  const { messages, typingUsers, addMessage, loadMessages } = useChatStore();
+  const { categories } = useCommunityStore();
+  const { messages, typingUsers, addMessage, subscribeToChannel } = useChatStore();
   const { user } = useAuthStore();
   const { memberPanelOpen, toggleMemberPanel } = useUiStore();
 
@@ -214,34 +196,70 @@ export default function ChannelPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { loadMessages(channelId); }, [channelId, loadMessages]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMessages.length]);
+  // Subscribe to real-time Firestore messages for this channel
+  useEffect(() => {
+    const unsub = subscribeToChannel(channelId);
+    return () => {
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    };
+  }, [channelId, subscribeToChannel]);
 
-  const handleSend = useCallback(() => {
-    if (!input.trim() || !user) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [channelMessages.length]);
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim();
+    if (!text || !user) return;
+
+    const authorObj = {
+      id: user.id,
+      displayName: user.displayName || user.username || 'User',
+      username: user.username || 'user',
+      avatar: user.avatar || '',
+      status: user.status || 'online',
+    };
+
     const newMsg: Message = {
       id: generateId(),
       channelId,
-      communityId: communityId ?? 'community-1',
-      author: user as unknown as Message['author'],
-      content: input.trim(),
+      communityId: communityId ?? '',
+      authorId: user.id,
+      author: authorObj as any,
+      content: text,
       type: 'text',
       reactions: [],
       attachments: [],
       mentions: [],
       isPinned: false,
       isEdited: false,
+      editedAt: null,
+      deletedAt: null,
+      replyToId: replyingTo ? replyingTo.id : null,
+      replyTo: replyingTo
+        ? {
+            id: replyingTo.id,
+            content: replyingTo.content,
+            author: replyingTo.author,
+          }
+        : undefined,
       createdAt: new Date().toISOString(),
-      replyTo: replyingTo ?? undefined,
     };
-    addMessage(channelId, newMsg);
+
     setInput('');
     setReplyingTo(null);
     setShowEmojiPicker(false);
+
+    await addMessage(channelId, newMsg);
   }, [input, user, channelId, communityId, addMessage, replyingTo]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   // Group consecutive messages
@@ -250,9 +268,10 @@ export default function ChannelPage() {
   let lastTime = 0;
   for (const msg of channelMessages) {
     const ts = new Date(msg.createdAt).getTime();
-    const isGrouped = msg.author.id === lastAuthorId && ts - lastTime < 5 * 60 * 1000;
+    const currentAuthorId = msg.author?.id ?? msg.authorId ?? '';
+    const isGrouped = currentAuthorId === lastAuthorId && ts - lastTime < 5 * 60 * 1000;
     groupedMessages.push({ msg, isGrouped });
-    lastAuthorId = msg.author.id;
+    lastAuthorId = currentAuthorId;
     lastTime = ts;
   }
 
@@ -298,7 +317,7 @@ export default function ChannelPage() {
           <p className="text-sm text-gray-400">{activeChannel?.topic ?? 'This is the start of this channel.'}</p>
         </div>
 
-        {/* Messages */}
+        {/* Message list */}
         {groupedMessages.map(({ msg, isGrouped }, idx) => {
           const prevMsg = idx > 0 ? groupedMessages[idx - 1]?.msg : null;
           const showDateSep = !prevMsg || new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
@@ -336,7 +355,7 @@ export default function ChannelPage() {
           <div className="mb-2 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-400">
             <div className="flex items-center gap-1.5">
               <Reply className="h-3.5 w-3.5" />
-              <span>Replying to <strong className="text-white">{replyingTo.author.displayName}</strong></span>
+              <span>Replying to <strong className="text-white">{replyingTo.author?.displayName || 'User'}</strong></span>
             </div>
             <button onClick={() => setReplyingTo(null)} className="hover:text-white transition-colors"><X className="h-3.5 w-3.5" /></button>
           </div>
