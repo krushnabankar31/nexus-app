@@ -9,7 +9,6 @@ import {
   onSnapshot,
   query,
   where,
-  getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
 import { playOutgoingRing, playIncomingRing, stopRingtone } from '@/lib/call-sound';
@@ -38,6 +37,8 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ],
 };
 
@@ -53,6 +54,7 @@ interface CallState {
   isMuted: boolean;
   isCameraOff: boolean;
   isDeafened: boolean;
+  isScreenSharing: boolean;
   callDuration: number;
 
   peerConnection: RTCPeerConnection | null;
@@ -64,8 +66,9 @@ interface CallState {
   endCall: () => Promise<void>;
 
   toggleMute: () => void;
-  toggleCamera: () => void;
+  toggleCamera: () => Promise<void>;
   toggleDeafen: () => void;
+  toggleScreenShare: () => Promise<void>;
   setCallDuration: (duration: number | ((prev: number) => number)) => void;
 }
 
@@ -81,6 +84,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
   isMuted: false,
   isCameraOff: false,
   isDeafened: false,
+  isScreenSharing: false,
   callDuration: 0,
   peerConnection: null,
 
@@ -89,7 +93,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
       callDuration: typeof fn === 'function' ? fn(state.callDuration) : fn,
     })),
 
-  // Global listener for incoming calls targeted to currentUser
+  // Global incoming call listener
   initIncomingCallListener: (currentUserId: string) => {
     if (!isFirebaseConfigured() || !db || !currentUserId) {
       return () => {};
@@ -107,7 +111,6 @@ export const useCallStore = create<CallState>()((set, get) => ({
         q,
         (snapshot) => {
           if (snapshot.empty) {
-            // No active ringing call for this user
             if (get().incomingCall) {
               stopRingtone();
               set({ incomingCall: null, callStatus: get().currentCall ? get().callStatus : 'idle' });
@@ -115,12 +118,10 @@ export const useCallStore = create<CallState>()((set, get) => ({
             return;
           }
 
-          // Pick the first ringing call
           const docSnap = snapshot.docs[0];
           const callData = docSnap.data() as CallSession;
           const callWithId = { ...callData, id: docSnap.id };
 
-          // If not already in an active call, ring!
           if (!get().currentCall) {
             playIncomingRing();
             set({
@@ -173,20 +174,30 @@ export const useCallStore = create<CallState>()((set, get) => ({
       isMuted: false,
       isCameraOff: false,
       isDeafened: false,
+      isScreenSharing: false,
     });
 
     playOutgoingRing();
 
     try {
-      // 1. Get user media (mic & camera if video)
+      // 1. Get user media with proper constraints
+      const mediaConstraints: MediaStreamConstraints = {
+        audio: true,
+        video:
+          type === 'video'
+            ? {
+                width: { ideal: 1280, max: 1920 },
+                height: { ideal: 720, max: 1080 },
+                facingMode: 'user',
+              }
+            : false,
+      };
+
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: type === 'video',
-        });
+        stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       } catch (mediaErr) {
-        // Fallback to audio-only if video failed
+        console.warn('Video acquisition fallback to audio:', mediaErr);
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
@@ -194,22 +205,29 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
       // 2. Initialize RTCPeerConnection
       const pc = new RTCPeerConnection(RTC_CONFIG);
-      const remoteStream = new MediaStream();
-      set({ peerConnection: pc, remoteStream });
+      set({ peerConnection: pc });
 
-      // Add local tracks
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      // Add local tracks to peer connection
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
 
-      // Listen for remote tracks
+      // Handle remote tracks robustly
       pc.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-          remoteStream.addTrack(track);
-        });
-        set({ remoteStream });
+        console.log('Received remote track:', event.track.kind);
+        if (event.streams && event.streams[0]) {
+          set({ remoteStream: event.streams[0] });
+        } else {
+          const currentRemote = get().remoteStream || new MediaStream();
+          currentRemote.addTrack(event.track);
+          set({ remoteStream: currentRemote });
+        }
       };
 
-      // 3. Collect local ICE candidates and write to Firestore subcollection
+      // 3. ICE Candidate Queue for handling early arrival
+      const candidateQueue: any[] = [];
       const callerCandidatesCol = collection(db, 'calls', callId, 'callerCandidates');
+
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           const candidateData = event.candidate.toJSON();
@@ -218,8 +236,11 @@ export const useCallStore = create<CallState>()((set, get) => ({
         }
       };
 
-      // 4. Create offer
-      const offer = await pc.createOffer();
+      // 4. Create and set local offer
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: type === 'video',
+      });
       await pc.setLocalDescription(offer);
 
       const callDocRef = doc(db, 'calls', callId);
@@ -230,7 +251,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
       });
 
       // 5. Listen to call document for answer / status change
-      const unsubCallDoc = onSnapshot(callDocRef, async (snap) => {
+      onSnapshot(callDocRef, async (snap) => {
         if (!snap.exists()) return;
         const data = snap.data() as CallSession;
 
@@ -240,6 +261,14 @@ export const useCallStore = create<CallState>()((set, get) => ({
           const answerDesc = new RTCSessionDescription(data.answer);
           await pc.setRemoteDescription(answerDesc);
 
+          // Drain queued candidates
+          while (candidateQueue.length > 0) {
+            const cand = candidateQueue.shift();
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {}
+          }
+
           // Listen for recipient ICE candidates
           const recipientCandCol = collection(db, 'calls', callId, 'recipientCandidates');
           onSnapshot(recipientCandCol, (candSnap) => {
@@ -247,10 +276,12 @@ export const useCallStore = create<CallState>()((set, get) => ({
               if (change.type === 'added') {
                 const candData = change.doc.data();
                 try {
-                  await pc.addIceCandidate(new RTCIceCandidate(candData));
-                } catch (e) {
-                  // Ignore redundant ICE candidates
-                }
+                  if (pc.remoteDescription && pc.remoteDescription.type) {
+                    await pc.addIceCandidate(new RTCIceCandidate(candData));
+                  } else {
+                    candidateQueue.push(candData);
+                  }
+                } catch (e) {}
               }
             });
           });
@@ -266,7 +297,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
         }
       });
 
-      // 6. 45-second timeout if no answer
+      // 6. Timeout if no answer in 45s
       setTimeout(() => {
         if (get().callStatus === 'calling') {
           stopRingtone();
@@ -298,17 +329,28 @@ export const useCallStore = create<CallState>()((set, get) => ({
       isMuted: false,
       isCameraOff: false,
       isDeafened: false,
+      isScreenSharing: false,
     });
 
     try {
-      // 1. Get user media
+      // 1. Get user media matching incoming call type
+      const mediaConstraints: MediaStreamConstraints = {
+        audio: true,
+        video:
+          incoming.type === 'video'
+            ? {
+                width: { ideal: 1280, max: 1920 },
+                height: { ideal: 720, max: 1080 },
+                facingMode: 'user',
+              }
+            : false,
+      };
+
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: incoming.type === 'video',
-        });
+        stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       } catch (mediaErr) {
+        console.warn('Video fallback to audio for recipient:', mediaErr);
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
@@ -316,22 +358,29 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
       // 2. Initialize RTCPeerConnection
       const pc = new RTCPeerConnection(RTC_CONFIG);
-      const remoteStream = new MediaStream();
-      set({ peerConnection: pc, remoteStream });
+      set({ peerConnection: pc });
 
-      // Add local tracks
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      // Add local tracks to peer connection
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
 
-      // Listen for remote tracks
+      // Handle remote tracks
       pc.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-          remoteStream.addTrack(track);
-        });
-        set({ remoteStream });
+        console.log('Recipient received remote track:', event.track.kind);
+        if (event.streams && event.streams[0]) {
+          set({ remoteStream: event.streams[0] });
+        } else {
+          const currentRemote = get().remoteStream || new MediaStream();
+          currentRemote.addTrack(event.track);
+          set({ remoteStream: currentRemote });
+        }
       };
 
-      // 3. Collect local ICE candidates for recipient
+      // 3. ICE candidate handling
+      const candidateQueue: any[] = [];
       const recipientCandCol = collection(db, 'calls', incoming.id, 'recipientCandidates');
+
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           const candidateData = event.candidate.toJSON();
@@ -343,6 +392,14 @@ export const useCallStore = create<CallState>()((set, get) => ({
       // 4. Set remote offer & create answer
       if (incoming.offer) {
         await pc.setRemoteDescription(new RTCSessionDescription(incoming.offer));
+      }
+
+      // Drain early candidates
+      while (candidateQueue.length > 0) {
+        const c = candidateQueue.shift();
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(c));
+        } catch (e) {}
       }
 
       const answer = await pc.createAnswer();
@@ -367,10 +424,12 @@ export const useCallStore = create<CallState>()((set, get) => ({
           if (change.type === 'added') {
             const candData = change.doc.data();
             try {
-              await pc.addIceCandidate(new RTCIceCandidate(candData));
-            } catch (e) {
-              // Ignore redundant ICE candidates
-            }
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                await pc.addIceCandidate(new RTCIceCandidate(candData));
+              } else {
+                candidateQueue.push(candData);
+              }
+            } catch (e) {}
           }
         });
       });
@@ -408,24 +467,19 @@ export const useCallStore = create<CallState>()((set, get) => ({
     stopRingtone();
     const { currentCall, peerConnection, localStream } = get();
 
-    // 1. Stop all local tracks
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
     }
 
-    // 2. Close peer connection
     if (peerConnection) {
       peerConnection.close();
     }
 
-    // 3. Mark call ended in Firestore
     if (currentCall && isFirebaseConfigured() && db) {
       try {
         const callDocRef = doc(db, 'calls', currentCall.id);
         await setDoc(callDocRef, { status: 'ended', endedAt: serverTimestamp() }, { merge: true });
-      } catch (err) {
-        // Silently catch
-      }
+      } catch (err) {}
     }
 
     set({
@@ -440,32 +494,93 @@ export const useCallStore = create<CallState>()((set, get) => ({
       isMuted: false,
       isCameraOff: false,
       isDeafened: false,
+      isScreenSharing: false,
     });
   },
 
   toggleMute: () => {
     const { localStream, isMuted } = get();
     if (localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach((t) => {
-        t.enabled = isMuted; // Invert: if currently muted, enable it
+      localStream.getAudioTracks().forEach((t) => {
+        t.enabled = isMuted; // Invert state
       });
     }
     set({ isMuted: !isMuted });
   },
 
-  toggleCamera: () => {
-    const { localStream, isCameraOff } = get();
-    if (localStream) {
-      const videoTracks = localStream.getVideoTracks();
+  toggleCamera: async () => {
+    const { localStream, peerConnection, isCameraOff } = get();
+    if (!localStream) return;
+
+    const videoTracks = localStream.getVideoTracks();
+
+    // If localStream already has video track, toggle enabled
+    if (videoTracks.length > 0) {
       videoTracks.forEach((t) => {
         t.enabled = isCameraOff;
       });
+      set({ isCameraOff: !isCameraOff });
+      return;
     }
-    set({ isCameraOff: !isCameraOff });
+
+    // If video track was not yet requested, acquire it dynamically
+    try {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      });
+      const newTrack = videoStream.getVideoTracks()[0];
+      localStream.addTrack(newTrack);
+
+      if (peerConnection) {
+        peerConnection.addTrack(newTrack, localStream);
+      }
+
+      set({ localStream, isCameraOff: false });
+    } catch (err) {
+      console.warn('Unable to enable camera dynamically:', err);
+    }
   },
 
   toggleDeafen: () => {
     set((state) => ({ isDeafened: !state.isDeafened }));
+  },
+
+  toggleScreenShare: async () => {
+    const { peerConnection, localStream, isScreenSharing } = get();
+    if (!peerConnection || !localStream) return;
+
+    if (!isScreenSharing) {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        const sender = peerConnection.getSenders().find((s) => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(screenTrack);
+        } else {
+          peerConnection.addTrack(screenTrack, localStream);
+        }
+
+        screenTrack.onended = () => {
+          // Revert back to camera when user stops screen share from browser banner
+          const camTrack = localStream.getVideoTracks()[0];
+          if (sender && camTrack) {
+            sender.replaceTrack(camTrack);
+          }
+          set({ isScreenSharing: false });
+        };
+
+        set({ isScreenSharing: true });
+      } catch (err) {
+        console.warn('Screen sharing cancelled:', err);
+      }
+    } else {
+      const camTrack = localStream.getVideoTracks()[0];
+      const sender = peerConnection.getSenders().find((s) => s.track?.kind === 'video');
+      if (sender && camTrack) {
+        sender.replaceTrack(camTrack);
+      }
+      set({ isScreenSharing: false });
+    }
   },
 }));
