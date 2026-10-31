@@ -21,10 +21,12 @@ function MessageBubble({
   msg,
   isGrouped,
   channelId,
+  onRequestDelete,
 }: {
   msg: Message;
   isGrouped: boolean;
   channelId: string;
+  onRequestDelete?: (msg: Message) => void;
 }) {
   const { addReaction, removeReaction, deleteMessage } = useChatStore();
   const { user: currentUser } = useAuthStore();
@@ -85,7 +87,14 @@ function MessageBubble({
             {msg.isPinned && <Pin className="h-3 w-3 text-amber-400" />}
             {canDelete && (
               <button
-                onClick={() => deleteMessage(channelId, msg.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onRequestDelete) {
+                    onRequestDelete(msg);
+                  } else {
+                    deleteMessage(channelId, msg.id);
+                  }
+                }}
                 title="Delete message"
                 className="opacity-0 group-hover:opacity-100 hover:text-red-400 text-gray-500 p-0.5 rounded transition-all ml-1"
               >
@@ -158,7 +167,18 @@ function MessageBubble({
           ))}
           <div className="mx-1 h-4 w-px bg-white/10" />
           {canDelete && (
-            <button onClick={() => deleteMessage(channelId, msg.id)} title="Delete" className="rounded p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onRequestDelete) {
+                  onRequestDelete(msg);
+                } else {
+                  deleteMessage(channelId, msg.id);
+                }
+              }}
+              title="Delete"
+              className="rounded p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
@@ -192,7 +212,15 @@ export default function ChannelPage() {
   const communityId = params.communityId;
 
   const { categories } = useCommunityStore();
-  const { messages, typingUsers, addMessage, subscribeToChannel } = useChatStore();
+  const { messages, typingUsers, addMessage, subscribeToChannel, deleteMessage } = useChatStore();
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+
+  const confirmDelete = async () => {
+    if (messageToDelete) {
+      await deleteMessage(channelId, messageToDelete.id);
+      setMessageToDelete(null);
+    }
+  };
   const { user } = useAuthStore();
   const { memberPanelOpen, toggleMemberPanel } = useUiStore();
 
@@ -338,7 +366,12 @@ export default function ChannelPage() {
           return (
             <div key={msg.id}>
               {showDateSep && <DateSeparator date={msg.createdAt} />}
-              <MessageBubble msg={msg} isGrouped={isGrouped} channelId={channelId} />
+              <MessageBubble
+                msg={msg}
+                isGrouped={isGrouped}
+                channelId={channelId}
+                onRequestDelete={(m) => setMessageToDelete(m)}
+              />
             </div>
           );
         })}
@@ -439,6 +472,56 @@ export default function ChannelPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {messageToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[hsl(var(--bg-raised))] p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Message</h3>
+                <p className="text-xs text-slate-400">Are you sure you want to delete this message?</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[hsl(var(--bg-base))] border border-white/5 my-4 max-h-36 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-slate-200">
+                  {messageToDelete.author?.displayName || 'User'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {formatTime(messageToDelete.createdAt)}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed break-words whitespace-pre-wrap">
+                {messageToDelete.content}
+              </p>
+            </div>
+
+            <p className="text-[11px] text-slate-400 mb-5">
+              This message will be deleted for everyone in this channel. This action cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setMessageToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold shadow-md shadow-red-500/20 transition-all hover:scale-105"
+              >
+                Delete Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
