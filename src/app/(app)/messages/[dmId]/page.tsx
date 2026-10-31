@@ -26,6 +26,7 @@ export default function DMConversationPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recipient, setRecipient] = useState<User | null>(null);
   const [isLoadingRecipient, setIsLoadingRecipient] = useState(true);
+  const [dmToDelete, setDmToDelete] = useState<DMMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -252,7 +253,7 @@ export default function DMConversationPage() {
                     <span className="text-[10px] text-slate-500">{formatTime(msg.createdAt)}</span>
                     {isOwn && (
                       <button
-                        onClick={() => deleteDirectMessage(dmId, msg.id)}
+                        onClick={() => setDmToDelete(msg)}
                         className="text-slate-500 hover:text-red-400 p-0.5 rounded transition-colors ml-1"
                         title="Delete message"
                       >
@@ -338,6 +339,61 @@ export default function DMConversationPage() {
           </button>
         </div>
       </div>
+
+      {/* DM Delete Confirmation Modal */}
+      {dmToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[hsl(var(--bg-raised))] p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Message</h3>
+                <p className="text-xs text-slate-400">Are you sure you want to delete this message?</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[hsl(var(--bg-base))] border border-white/5 my-4 max-h-36 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-slate-200">
+                  {dmToDelete.sender?.displayName || 'You'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {formatTime(dmToDelete.createdAt)}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed break-words whitespace-pre-wrap">
+                {dmToDelete.content}
+              </p>
+            </div>
+
+            <p className="text-[11px] text-slate-400 mb-5">
+              This message will be permanently deleted from this conversation.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDmToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (dmToDelete) {
+                    await deleteDirectMessage(dmId, dmToDelete.id);
+                    setDmToDelete(null);
+                  }
+                }}
+                className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold shadow-md shadow-red-500/20 transition-all hover:scale-105"
+              >
+                Delete Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
