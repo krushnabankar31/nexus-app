@@ -5,6 +5,7 @@ import {
   collection,
   doc,
   setDoc,
+  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -60,6 +61,7 @@ interface DMState {
   initConversationsListener: (currentUserId: string) => () => void;
   subscribeToConversation: (conversationId: string) => () => void;
   sendDirectMessage: (sender: User, recipient: User, content: string) => Promise<string>;
+  deleteDirectMessage: (conversationId: string, msgId: string) => Promise<void>;
 }
 
 export const useDMStore = create<DMState>()((set, get) => ({
@@ -291,5 +293,25 @@ export const useDMStore = create<DMState>()((set, get) => ({
     }
 
     return conversationId;
+  },
+
+  deleteDirectMessage: async (conversationId: string, msgId: string) => {
+    // 1. Optimistic removal
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [conversationId]: (state.messages[conversationId] ?? []).filter((m) => m.id !== msgId),
+      },
+    }));
+
+    // 2. Delete document from Firestore
+    if (isFirebaseConfigured() && db) {
+      try {
+        const msgDocRef = doc(db, 'conversations', conversationId, 'messages', msgId);
+        await deleteDoc(msgDocRef);
+      } catch (err) {
+        console.warn('Error deleting direct message in Firestore:', err);
+      }
+    }
   },
 }));

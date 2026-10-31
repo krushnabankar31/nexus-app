@@ -41,7 +41,11 @@ function MessageBubble({
 
   const authorName = msg.author?.displayName || msg.author?.username || 'User';
   const authorAvatar = msg.author?.avatar;
-  const isOwn = (msg.author?.id ?? msg.authorId) === currentUser?.id;
+  const isOwn =
+    (msg.author?.id ?? msg.authorId) === currentUser?.id ||
+    (Boolean(currentUser?.displayName) && msg.author?.displayName === currentUser?.displayName);
+  const isAdmin = currentUser?.email === 'krushnabankar31@gmail.com';
+  const canDelete = isOwn || isAdmin;
   const reactionsList = Array.isArray(msg.reactions) ? msg.reactions : [];
 
   return (
@@ -49,6 +53,7 @@ function MessageBubble({
       className={cn('group relative flex items-start gap-3 rounded-xl px-3 py-1.5 hover:bg-white/4 transition-colors', !isGrouped && 'mt-4')}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false); }}
+      onClick={() => setShowActions((v) => !v)}
     >
       {/* Avatar / spacer */}
       {!isGrouped ? (
@@ -72,12 +77,21 @@ function MessageBubble({
       <div className="flex-1 min-w-0">
         {/* Header */}
         {!isGrouped && (
-          <div className="mb-1 flex items-baseline gap-2">
+          <div className="mb-1 flex items-center gap-2">
             <span className="font-semibold text-white text-sm hover:underline cursor-pointer">
               {authorName}
             </span>
             <span className="text-[11px] text-gray-500">{formatDate(msg.createdAt)}</span>
             {msg.isPinned && <Pin className="h-3 w-3 text-amber-400" />}
+            {canDelete && (
+              <button
+                onClick={() => deleteMessage(channelId, msg.id)}
+                title="Delete message"
+                className="opacity-0 group-hover:opacity-100 hover:text-red-400 text-gray-500 p-0.5 rounded transition-all ml-1"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
           </div>
         )}
 
@@ -143,7 +157,7 @@ function MessageBubble({
             </button>
           ))}
           <div className="mx-1 h-4 w-px bg-white/10" />
-          {isOwn && (
+          {canDelete && (
             <button onClick={() => deleteMessage(channelId, msg.id)} title="Delete" className="rounded p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
