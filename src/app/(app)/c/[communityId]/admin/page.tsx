@@ -16,10 +16,11 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartTooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
-import { MOCK_COMMUNITIES, MOCK_USERS, MOCK_ANALYTICS, CURRENT_USER } from '@/lib/mock-data';
+import { MOCK_ANALYTICS, CURRENT_USER } from '@/lib/mock-data';
 import { useCommunityStore, canDeleteCommunity } from '@/stores/community-store';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { getInitials, getUserEffectiveStatus } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AdminSection =
@@ -192,11 +193,26 @@ function OverviewSection({ community }: { community: any }) {
 function MembersSection() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const { members } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
 
-  const filtered = MOCK_USERS.filter((u) =>
+  const realUsers = members
+    .filter((m) => m.user)
+    .map((m) => ({
+      ...m.user,
+      id: m.userId,
+      displayName: m.user?.displayName || m.user?.username || 'User',
+      username: m.user?.username || 'user',
+      avatar: m.user?.avatar || '',
+      joinedAt: m.joinedAt || new Date().toISOString(),
+      role: m.roles?.[0]?.name || 'Member',
+      roleColor: m.roles?.[0]?.color || '#6366f1',
+    }));
+
+  const filtered = realUsers.filter((u) =>
     (u.displayName.toLowerCase().includes(search.toLowerCase()) ||
      u.username.toLowerCase().includes(search.toLowerCase())) &&
-    (roleFilter === 'all')
+    (roleFilter === 'all' || u.role.toLowerCase() === roleFilter.toLowerCase())
   );
 
   return (
@@ -239,15 +255,23 @@ function MembersSection() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {filtered.slice(0, 12).map((user) => (
+            {filtered.slice(0, 12).map((user) => {
+              const effStatus = getUserEffectiveStatus(user, currentUser?.id);
+              return (
               <tr key={user.id} className="hover:bg-white/3 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={user.avatar}
-                      alt={user.displayName}
-                      className="w-8 h-8 rounded-full bg-brand-500/20"
-                    />
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.displayName}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+                        {getInitials(user.displayName)}
+                      </div>
+                    )}
                     <div>
                       <div className="font-medium text-white">{user.displayName}</div>
                       <div className="text-xs text-slate-500">@{user.username}</div>
@@ -255,8 +279,8 @@ function MembersSection() {
                   </div>
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: '#6366f120', color: '#6366f1' }}>
-                    Member
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: `${user.roleColor}20`, color: user.roleColor }}>
+                    {user.role}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">
@@ -264,12 +288,12 @@ function MembersSection() {
                 </td>
                 <td className="px-4 py-3 hidden lg:table-cell">
                   <span className={`flex items-center gap-1.5 text-xs ${
-                    user.status === 'online' ? 'text-emerald-400' :
-                    user.status === 'idle' ? 'text-amber-400' :
-                    user.status === 'dnd' ? 'text-red-400' : 'text-slate-500'
+                    effStatus === 'online' ? 'text-emerald-400' :
+                    effStatus === 'idle' ? 'text-amber-400' :
+                    effStatus === 'dnd' ? 'text-red-400' : 'text-slate-500'
                   }`}>
                     <span className="h-2 w-2 rounded-full bg-current" />
-                    {user.status}
+                    {effStatus}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -283,7 +307,8 @@ function MembersSection() {
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
         <div className="px-4 py-3 border-t border-white/5 text-xs text-slate-500">
@@ -592,8 +617,17 @@ export default function CommunityAdminPage() {
   const { communities } = useCommunityStore();
   const community =
     communities.find((c) => c.id === communityId) ??
-    MOCK_COMMUNITIES.find((c) => c.id === communityId) ??
-    MOCK_COMMUNITIES[0];
+    communities[0] ?? {
+      id: communityId,
+      name: 'Community',
+      description: 'A space on Nexus.',
+      icon: '🌐',
+      accentColor: '#6366f1',
+      memberCount: 1,
+      onlineCount: 1,
+      category: 'General',
+      isVerified: false,
+    };
 
   const renderSection = () => {
     switch (section) {

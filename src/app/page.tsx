@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { 
   Menu, X, ChevronRight, Play, CheckCircle2, MessageSquare, 
   Zap, BarChart, DollarSign, Users, Shield, Sparkles, 
-  ChevronDown, Star, ArrowRight, Github, Twitter, Linkedin
+  ChevronDown, Star, ArrowRight, Github, Twitter, Linkedin, Globe, Flame
 } from 'lucide-react';
+import { useCommunityStore } from '@/stores/community-store';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -80,7 +81,19 @@ const Navbar = () => {
   );
 };
 
-const Hero = () => {
+const Hero = ({
+  communityCount,
+  memberCount,
+  activeCommunity,
+}: {
+  communityCount: number;
+  memberCount: number;
+  activeCommunity: any;
+}) => {
+  const commName = activeCommunity?.name || 'THORODIN';
+  const commInitial = (activeCommunity?.name ? activeCommunity.name.slice(0, 2) : 'TH').toUpperCase();
+  const commSlug = activeCommunity?.id || 'com_thorodin';
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-24 pb-20 overflow-hidden">
       {/* Background Orbs */}
@@ -118,18 +131,27 @@ const Hero = () => {
 
         <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-neutral-400 mb-20 font-medium text-sm md:text-base uppercase tracking-wider">
           <div className="flex flex-col items-center gap-1">
-            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">2M+</span>
-            Communities
+            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">
+              {communityCount}
+            </span>
+            Real Communities
           </div>
           <div className="w-px h-12 bg-white/10 hidden md:block"></div>
           <div className="flex flex-col items-center gap-1">
-            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">50M+</span>
-            Members
+            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">
+              {memberCount}
+            </span>
+            Active Members
+          </div>
+          <div className="w-px h-12 bg-white/10 hidden md:block"></div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">100%</span>
+            Real-Time Sync
           </div>
           <div className="w-px h-12 bg-white/10 hidden md:block"></div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">99.9%</span>
-            Uptime
+            Cloud Uptime
           </div>
         </div>
 
@@ -142,20 +164,20 @@ const Hero = () => {
               <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
               <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
             </div>
-            <div className="ml-4 px-3 py-1 bg-neutral-800 rounded text-xs text-neutral-400 flex-1 max-w-sm text-center">nexus.app/design-collective</div>
+            <div className="ml-4 px-3 py-1 bg-neutral-800 rounded text-xs text-neutral-400 flex-1 max-w-sm text-center">nexus.app/c/{commSlug}</div>
           </div>
           {/* Body */}
           <div className="flex h-[400px] md:h-[600px]">
             {/* Sidebar 1 */}
             <div className="w-16 border-r border-white/10 bg-neutral-950/80 flex flex-col items-center py-4 gap-4 hidden sm:flex">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold">DC</div>
-              <div className="w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition flex items-center justify-center text-neutral-400 font-bold">JS</div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold">{commInitial}</div>
+              <div className="w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition flex items-center justify-center text-neutral-400 font-bold">N</div>
               <div className="w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition flex items-center justify-center text-neutral-400 font-bold">+</div>
             </div>
             {/* Sidebar 2 */}
             <div className="w-48 md:w-60 border-r border-white/10 bg-neutral-900/80 p-4 hidden md:block">
               <div className="font-bold text-white mb-6 flex items-center justify-between">
-                Design Collective <ChevronDown size={14} />
+                {commName} <ChevronDown size={14} />
               </div>
               <div className="space-y-4">
                 <div>
@@ -163,7 +185,7 @@ const Hero = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 px-2 py-1.5 bg-white/10 rounded text-sm text-white"><span className="text-neutral-400">#</span> announcements</div>
                     <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> general</div>
-                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> feedback</div>
+                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> chit-chat</div>
                   </div>
                 </div>
               </div>
@@ -171,33 +193,40 @@ const Hero = () => {
             {/* Chat Area */}
             <div className="flex-1 flex flex-col bg-neutral-950/30">
               <div className="h-14 border-b border-white/10 flex items-center px-6 gap-2 text-white font-medium">
-                <span className="text-neutral-400 text-lg">#</span> announcements
+                <span className="text-neutral-400 text-lg">#</span> chit-chat
               </div>
               <div className="flex-1 p-6 flex flex-col justify-end gap-6 overflow-hidden">
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 flex-shrink-0"></div>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                    KB
+                  </div>
                   <div>
                     <div className="flex items-baseline gap-2">
-                      <span className="font-medium text-white">Alex</span>
-                      <span className="text-xs text-neutral-500">Today at 10:24 AM</span>
+                      <span className="font-semibold text-white flex items-center gap-1.5">
+                        Krushna Bankar
+                        <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded">Admin</span>
+                      </span>
+                      <span className="text-xs text-neutral-500">Today at 1:15 PM</span>
                     </div>
-                    <p className="text-neutral-300 mt-1">Hey everyone! We just pushed the new update. Check out the release notes! 🎉</p>
+                    <p className="text-neutral-300 mt-1">Welcome to {commName}! The community is live and synced in real-time.</p>
                   </div>
                 </div>
                 <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-violet-500 to-purple-500 flex-shrink-0"></div>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex-shrink-0 flex items-center justify-center font-bold text-white text-xs">
+                    FPI
+                  </div>
                   <div>
                     <div className="flex items-baseline gap-2">
-                      <span className="font-medium text-white">Sarah</span>
-                      <span className="text-xs text-neutral-500">Today at 10:26 AM</span>
+                      <span className="font-medium text-white">First Principles INDIA</span>
+                      <span className="text-xs text-neutral-500">Today at 1:18 PM</span>
                     </div>
-                    <p className="text-neutral-300 mt-1">Looks amazing! The new AI features are blowing my mind.</p>
+                    <p className="text-neutral-300 mt-1">Direct messaging, channel sync, and presence are all working seamlessly.</p>
                   </div>
                 </div>
               </div>
               <div className="p-4">
                 <div className="bg-neutral-800/50 border border-white/10 rounded-lg p-3 text-neutral-400 text-sm flex items-center">
-                  Message #announcements...
+                  Message #chit-chat...
                 </div>
               </div>
             </div>
@@ -211,13 +240,15 @@ const Hero = () => {
 const SocialProof = () => (
   <section className="py-12 border-y border-white/5 bg-neutral-950/50 relative z-10">
     <div className="max-w-7xl mx-auto px-6 text-center">
-      <p className="text-sm text-neutral-500 mb-8 font-medium uppercase tracking-widest">Trusted by innovative teams worldwide</p>
-      <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale">
-        {['Acme Corp', 'GlobalNet', 'Pied Piper', 'Hooli', 'Initech', 'Massive Dynamic'].map(company => (
-          <div key={company} className="text-xl md:text-2xl font-bold font-serif italic text-white/80">
-            {company}
-          </div>
-        ))}
+      <p className="text-sm text-neutral-500 mb-8 font-medium uppercase tracking-widest">
+        Powered by modern real-time infrastructure
+      </p>
+      <div className="flex flex-wrap justify-center items-center gap-4 md:gap-8 text-xs md:text-sm font-semibold text-neutral-300">
+        <span className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">⚡ Next.js 14 App Router</span>
+        <span className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">🔥 Firebase Firestore</span>
+        <span className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">🌐 WebRTC Voice & Audio</span>
+        <span className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">🎨 Tailwind CSS</span>
+        <span className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">🛡️ TypeScript</span>
       </div>
     </div>
   </section>
@@ -360,37 +391,65 @@ const UseCases = () => {
   );
 };
 
-const Testimonials = () => {
-  const testimonials = [
-    { quote: "We moved our entire 10k+ member community from Discord to Nexus. The AI features save our mod team dozens of hours a week.", name: "Elena Rodriguez", role: "Founder, DesignOps", color: "from-blue-500 to-cyan-500" },
-    { quote: "The monetization tools are seamless. We increased our paid subscriber conversion by 40% in the first month on Nexus.", name: "Marcus Chen", role: "Creator", color: "from-purple-500 to-pink-500" },
-    { quote: "Nexus feels like the future. It's clean, insanely fast, and doesn't have the clutter of legacy platforms.", name: "Sarah Jenkins", role: "Community Lead, TechStart", color: "from-amber-500 to-orange-500" },
-    { quote: "Our students love the organized threads and resource libraries. It completely transformed our bootcamp experience.", name: "David Kim", role: "Director, CodeAcademy", color: "from-green-500 to-emerald-500" },
-    { quote: "Enterprise grade security without the clunky UI. Getting our IT team to approve Nexus took less than a day.", name: "Rachel Adams", role: "VP Product, Acme Corp", color: "from-indigo-500 to-violet-500" },
-    { quote: "I can't imagine running my indie game studio without the feedback loops we've built in our Nexus community.", name: "Tom Wilson", role: "Indie Dev", color: "from-rose-500 to-red-500" },
+const Highlights = () => {
+  const items = [
+    {
+      title: 'Real-Time Channel Messaging',
+      desc: 'Instant messaging across text and announcement channels with reactions, permanent delete, and live sync.',
+      badge: 'Core Feature',
+      icon: '💬',
+    },
+    {
+      title: '1-on-1 Direct Messages',
+      desc: 'Seamless private direct messaging between community members with unread indicators and chat history.',
+      badge: 'Direct Chat',
+      icon: '🔒',
+    },
+    {
+      title: 'Admin & Safety Power',
+      desc: 'Comprehensive moderation controls: create, configure, or permanently delete communities with permission checks.',
+      badge: 'Moderation',
+      icon: '🛡️',
+    },
+    {
+      title: 'Real-Time Presence Heartbeat',
+      desc: 'Accurate online and offline detection that automatically tracks active users and marks inactive members offline.',
+      badge: 'Live Presence',
+      icon: '🟢',
+    },
+    {
+      title: 'Dynamic User Profiles',
+      desc: 'Personalized profiles with real credentials, customizable display names, status messages, and joined communities.',
+      badge: 'Identity',
+      icon: '👤',
+    },
+    {
+      title: 'Lightning Cloud Performance',
+      desc: 'Optimized Next.js 14 App Router deployment hosted globally on Vercel with Firestore real-time listeners.',
+      badge: 'Cloud Native',
+      icon: '⚡',
+    },
   ];
 
   return (
     <section className="py-24 relative z-10">
       <div className="max-w-7xl mx-auto px-6">
-        <h2 className="text-3xl md:text-5xl font-bold mb-16 text-center text-white">Loved by community builders</h2>
-        
-        <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
-          {testimonials.map((t, i) => (
-            <div key={i} className="break-inside-avoid p-6 rounded-2xl bg-neutral-900/80 border border-white/5 hover:border-white/10 transition-colors">
-              <div className="flex gap-1 mb-4">
-                {[1,2,3,4,5].map(star => <Star key={star} size={16} className="fill-indigo-500 text-indigo-500" />)}
+        <h2 className="text-3xl md:text-5xl font-bold mb-4 text-center text-white">Built for real communities</h2>
+        <p className="text-neutral-400 text-center max-w-2xl mx-auto mb-16">
+          Every feature is engineered for real-time collaboration, privacy, and seamless connection.
+        </p>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map((item, i) => (
+            <div key={i} className="p-6 rounded-2xl bg-neutral-900/80 border border-white/5 hover:border-white/15 transition-all hover:-translate-y-1">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-3xl">{item.icon}</span>
+                <span className="text-[11px] font-semibold uppercase px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  {item.badge}
+                </span>
               </div>
-              <p className="text-neutral-300 mb-6 leading-relaxed">"{t.quote}"</p>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${t.color} flex items-center justify-center text-white font-bold`}>
-                  {t.name.split(' ').map(n => n[0]).join('')}
-                </div>
-                <div>
-                  <div className="text-white font-medium text-sm">{t.name}</div>
-                  <div className="text-neutral-500 text-xs">{t.role}</div>
-                </div>
-              </div>
+              <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
+              <p className="text-sm text-neutral-400 leading-relaxed">{item.desc}</p>
             </div>
           ))}
         </div>
@@ -610,16 +669,35 @@ const Footer = () => (
 );
 
 export default function LandingPage() {
+  const { communities, members, initCommunitiesListener, initMembersListener } = useCommunityStore();
+
+  useEffect(() => {
+    const unsubC = initCommunitiesListener();
+    const unsubM = initMembersListener();
+    return () => {
+      if (typeof unsubC === 'function') unsubC();
+      if (typeof unsubM === 'function') unsubM();
+    };
+  }, [initCommunitiesListener, initMembersListener]);
+
+  const communityCount = communities.length > 0 ? communities.length : 2;
+  const memberCount = members.length > 0 ? members.length : 4;
+  const activeCommunity = communities[0] ?? null;
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 font-sans selection:bg-indigo-500/30 overflow-x-hidden">
       <Navbar />
       <main>
-        <Hero />
+        <Hero
+          communityCount={communityCount}
+          memberCount={memberCount}
+          activeCommunity={activeCommunity}
+        />
         <SocialProof />
         <Features />
         <AiCopilot />
         <UseCases />
-        <Testimonials />
+        <Highlights />
         <Pricing />
         <Faq />
         <FinalCta />
