@@ -85,17 +85,17 @@ export function DeleteCommunityModal() {
           </button>
         </div>
 
-        {/* Permission Power Banner */}
+        {/* Permission Banner */}
         <div className="px-5 pt-4">
           {hasPower ? (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium">
               <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-              <span>Admin / Owner Power Verified — You have deletion privileges.</span>
+              <span>Permission Verified — You have authorization to delete this community.</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium">
               <ShieldAlert size={16} className="text-amber-400 shrink-0" />
-              <span>Permission Denied — Only the Community Owner or Admin has this power.</span>
+              <span>Permission Denied — Only the Community Owner or Admin can delete this community.</span>
             </div>
           )}
         </div>
