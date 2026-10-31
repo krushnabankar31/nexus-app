@@ -30,7 +30,7 @@ function GoogleAuthInner() {
       if (err?.code === 'auth/popup-closed-by-user') {
         setErrorMsg('Sign-in cancelled. Please click "Continue with Google" again.');
       } else if (err?.code === 'auth/unauthorized-domain') {
-        setErrorMsg('Domain not authorized in Firebase Console. Please add your Vercel URL to Authorized Domains in Firebase.');
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'preview.vercel.app';\n        setErrorMsg(`Domain "${host}" is not authorized in Firebase Console. Please add "${host}" to Authorized Domains or switch to your main production URL.`);
       } else if (err?.code === 'auth/operation-not-allowed') {
         setErrorMsg('Google sign-in is not enabled in Firebase Console. Please enable Google provider in Authentication.');
       } else {
@@ -103,9 +103,21 @@ function GoogleAuthInner() {
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2 text-left">
-            <AlertCircle size={15} className="text-red-400 shrink-0 mt-0.5" />
-            <span className="leading-relaxed">{errorMsg}</span>
+          <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex flex-col gap-2.5 text-left">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{errorMsg}</span>
+            </div>
+            {errorMsg.includes('authorized') && (
+              <div className="pt-1 border-t border-red-500/20">
+                <a
+                  href="https://nexus-app-ashy-theta.vercel.app"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 text-[11px] font-semibold transition-colors"
+                >
+                  Open Production URL (nexus-app-ashy-theta.vercel.app) &rarr;
+                </a>
+              </div>
+            )}
           </div>
         )}
 
