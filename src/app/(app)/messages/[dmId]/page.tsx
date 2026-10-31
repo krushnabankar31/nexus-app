@@ -45,6 +45,7 @@ export default function DMConversationPage() {
     deleteDirectMessage,
     toggleReaction,
   } = useDMStore();
+  const { startCall } = useCallStore();
 
   const [input, setInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -57,11 +58,6 @@ export default function DMConversationPage() {
   const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<{ url: string; type: 'image' | 'file'; name?: string } | null>(null);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
-  const [activeCall, setActiveCall] = useState<'voice' | 'video' | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isDeafened, setIsDeafened] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -77,6 +73,21 @@ export default function DMConversationPage() {
   const currentUserId = currentUser?.id || '';
   const [u1, u2] = dmId ? dmId.split('_') : ['', ''];
   const recipientId = u1 === currentUserId ? u2 : u1;
+
+  // Safe call initiation handler
+  const handleInitiateCall = (type: 'voice' | 'video') => {
+    if (!currentUser) return;
+    const targetRecipient: User = recipient || {
+      id: recipientId,
+      displayName: recipientName || 'Friend',
+      username: recipient?.username || 'user',
+      avatar: recipient?.avatar || '',
+      status: 'online',
+      email: '',
+      createdAt: '',
+    };
+    startCall(currentUser, targetRecipient, type, dmId);
+  };
 
   // Resolve recipient details
   useEffect(() => {
@@ -326,17 +337,17 @@ export default function DMConversationPage() {
         <div className="flex items-center gap-1">
           {/* Start Voice Call */}
           <button
-            onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'voice', dmId)}
-            className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            onClick={() => handleInitiateCall('voice')}
+            className="p-2.5 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all cursor-pointer"
             title="Start Voice Call"
           >
-            <Phone size={17} />
+            <Phone size={18} />
           </button>
 
           {/* Start Video Call */}
           <button
-            onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'video', dmId)}
-            className="p-2 rounded-xl text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+            onClick={() => handleInitiateCall('video')}
+            className="p-2.5 rounded-xl text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 active:scale-95 transition-all cursor-pointer"
             title="Start Video Call"
           >
             <Video size={18} />
@@ -419,16 +430,22 @@ export default function DMConversationPage() {
             </p>
             <div className="flex items-center justify-center gap-2 mt-3">
               <button
-                onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'voice', dmId)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors"
+                onClick={() => handleInitiateCall('voice')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 active:scale-95 transition-all cursor-pointer"
               >
-                <Phone size={12} /> Voice Call
+                <Phone size={13} /> Voice Call
+              </button>
+              <button
+                onClick={() => handleInitiateCall('video')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-semibold border border-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Video size={13} /> Video Call
               </button>
               <button
                 onClick={() => setShowProfileModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-semibold border border-indigo-500/20 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold border border-white/10 active:scale-95 transition-all cursor-pointer"
               >
-                <UserIcon size={12} /> View Profile
+                <UserIcon size={13} /> View Profile
               </button>
             </div>
           </div>
@@ -908,18 +925,18 @@ export default function DMConversationPage() {
                 <button
                   onClick={() => {
                     setShowProfileModal(false);
-                    setActiveCall('voice');
+                    handleInitiateCall('voice');
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-semibold transition-all cursor-pointer"
                 >
                   <Phone size={14} /> Voice Call
                 </button>
                 <button
                   onClick={() => {
                     setShowProfileModal(false);
-                    setActiveCall('video');
+                    handleInitiateCall('video');
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors shadow-md shadow-brand-500/20"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-semibold transition-all shadow-md shadow-brand-500/20 cursor-pointer"
                 >
                   <Video size={14} /> Video Call
                 </button>

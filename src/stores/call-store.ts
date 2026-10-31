@@ -195,10 +195,23 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+          stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        } else {
+          stream = new MediaStream();
+        }
       } catch (mediaErr) {
         console.warn('Video acquisition fallback to audio:', mediaErr);
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+          if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } else {
+            stream = new MediaStream();
+          }
+        } catch (audioErr) {
+          console.warn('Microphone permission or device not accessible:', audioErr);
+          stream = new MediaStream();
+        }
       }
 
       set({ localStream: stream });
@@ -348,10 +361,23 @@ export const useCallStore = create<CallState>()((set, get) => ({
 
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+          stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        } else {
+          stream = new MediaStream();
+        }
       } catch (mediaErr) {
         console.warn('Video fallback to audio for recipient:', mediaErr);
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+          if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } else {
+            stream = new MediaStream();
+          }
+        } catch (audioErr) {
+          console.warn('Microphone permission or device not accessible:', audioErr);
+          stream = new MediaStream();
+        }
       }
 
       set({ localStream: stream });

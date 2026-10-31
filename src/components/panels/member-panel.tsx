@@ -7,6 +7,8 @@ import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { getConversationId } from '@/stores/dm-store';
+import { useCallStore } from '@/stores/call-store';
+import { Phone, Video } from 'lucide-react';
 import type { User } from '@nexus/types';
 
 const STATUS_CONFIG = {
@@ -20,6 +22,7 @@ export function MemberPanel() {
   const router = useRouter();
   const { members, activeCommunity } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
+  const { startCall } = useCallStore();
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -245,17 +248,43 @@ export function MemberPanel() {
                 </p>
               )}
 
-              <button
-                onClick={() => {
-                  if (!currentUser?.id || !selectedUser.id) return;
-                  const convId = getConversationId(currentUser.id, selectedUser.id);
-                  router.push(`/messages/${convId}`);
-                  setSelectedUser(null);
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-500 text-white font-semibold text-xs hover:bg-brand-600 transition-all shadow-md shadow-brand-500/20 hover:scale-[1.02]"
-              >
-                <MessageSquare size={15} /> Send Direct Message
-              </button>
+              <div className="flex gap-2 w-full mt-2">
+                <button
+                  onClick={() => {
+                    if (!currentUser?.id || !selectedUser.id) return;
+                    const convId = getConversationId(currentUser.id, selectedUser.id);
+                    router.push(`/messages/${convId}`);
+                    setSelectedUser(null);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-brand-500 text-white font-semibold text-xs hover:bg-brand-600 transition-all shadow-md shadow-brand-500/20 active:scale-95 cursor-pointer"
+                >
+                  <MessageSquare size={14} /> Message
+                </button>
+                <button
+                  onClick={() => {
+                    if (!currentUser || !selectedUser) return;
+                    const convId = getConversationId(currentUser.id, selectedUser.id);
+                    startCall(currentUser, selectedUser, 'voice', convId);
+                    setSelectedUser(null);
+                  }}
+                  className="p-2.5 rounded-xl bg-white/10 hover:bg-emerald-500/20 hover:text-emerald-400 text-slate-300 border border-white/10 transition-all active:scale-95 cursor-pointer"
+                  title="Voice Call"
+                >
+                  <Phone size={15} />
+                </button>
+                <button
+                  onClick={() => {
+                    if (!currentUser || !selectedUser) return;
+                    const convId = getConversationId(currentUser.id, selectedUser.id);
+                    startCall(currentUser, selectedUser, 'video', convId);
+                    setSelectedUser(null);
+                  }}
+                  className="p-2.5 rounded-xl bg-white/10 hover:bg-indigo-500/20 hover:text-indigo-400 text-slate-300 border border-white/10 transition-all active:scale-95 cursor-pointer"
+                  title="Video Call"
+                >
+                  <Video size={15} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
