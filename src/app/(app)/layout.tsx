@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,9 +8,10 @@ import AppLayout from '@/components/layout/app-layout';
 
 export default function AppRootLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, initAuthListener } = useAuthStore();
+  const { isAuthenticated, user, initAuthListener } = useAuthStore();
   const { initCommunitiesListener, initMembersListener } = useCommunityStore();
   const [isMounted, setIsMounted] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -18,21 +19,31 @@ export default function AppRootLayout({ children }: { children: React.ReactNode 
     const unsubCommunities = initCommunitiesListener();
     const unsubMembers = initMembersListener();
 
-    if (!isAuthenticated) {
-      router.push('/login');
-    }
+    // Grace period to allow Zustand hydration and Firebase authState check
+    const timer = setTimeout(() => {
+      setAuthResolved(true);
+    }, 400);
 
     return () => {
+      clearTimeout(timer);
       unsubAuth();
       unsubCommunities();
       unsubMembers();
     };
-  }, [isAuthenticated, router, initAuthListener, initCommunitiesListener, initMembersListener]);
+  }, [initAuthListener, initCommunitiesListener, initMembersListener]);
 
-  if (!isMounted || !isAuthenticated) {
+  useEffect(() => {
+    // Only redirect if mounted and definitely not authenticated
+    if (authResolved && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [authResolved, isAuthenticated, router]);
+
+  if (!isMounted || (!isAuthenticated && !user?.id)) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-surface-900">
-        <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[hsl(var(--bg-base))]">
+        <div className="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <span className="text-xs text-slate-400 font-medium">Loading Nexus...</span>
       </div>
     );
   }

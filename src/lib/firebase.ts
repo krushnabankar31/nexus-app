@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 
 export interface FirebaseConfig {
@@ -74,6 +74,7 @@ if (typeof window !== 'undefined') {
     try {
       app = getApps().length === 0 ? initializeApp(config as Record<string, string>) : getApp();
       auth = getAuth(app);
+      setPersistence(auth, browserLocalPersistence).catch(() => {});
       try {
         db = initializeFirestore(app, { ignoreUndefinedProperties: true });
       } catch {
