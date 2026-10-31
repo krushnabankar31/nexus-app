@@ -6,6 +6,7 @@ import {
   doc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -73,6 +74,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           const remoteMsgs: Message[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
+            if (data.deletedAt) return;
             let createdAtStr = new Date().toISOString();
             if (data.createdAt?.toDate) {
               createdAtStr = data.createdAt.toDate().toISOString();
@@ -216,20 +218,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   deleteMessage: async (channelId, msgId) => {
-    const deletedAt = new Date().toISOString();
+    // 1. Optimistic removal
     set((state) => ({
       messages: {
         ...state.messages,
-        [channelId]: (state.messages[channelId] ?? []).map((m) =>
-          m.id === msgId ? { ...m, deletedAt } : m
-        ),
+        [channelId]: (state.messages[channelId] ?? []).filter((m) => m.id !== msgId),
       },
     }));
 
+    // 2. Permanently delete document from Firestore
     if (isFirebaseConfigured() && db) {
       try {
         const msgDocRef = doc(db, 'channels', channelId, 'messages', msgId);
-        await updateDoc(msgDocRef, { deletedAt: serverTimestamp() });
+        await deleteDoc(msgDocRef);
       } catch (err) {
         console.warn('Error deleting message in Firestore:', err);
       }

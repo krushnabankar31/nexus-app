@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  MessageSquare, Send, Smile, ArrowLeft, Shield, User as UserIcon,
+  MessageSquare, Send, Smile, ArrowLeft, Shield, User as UserIcon, Trash2,
 } from 'lucide-react';
 import { cn, formatTime, formatDate, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -20,7 +20,7 @@ export default function DMConversationPage() {
   const dmId = params.dmId;
 
   const { user: currentUser } = useAuthStore();
-  const { messages, conversations, subscribeToConversation, sendDirectMessage } = useDMStore();
+  const { messages, conversations, subscribeToConversation, sendDirectMessage, deleteDirectMessage } = useDMStore();
 
   const [input, setInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -203,7 +203,7 @@ export default function DMConversationPage() {
 
         {/* Message bubbles */}
         {conversationMessages.map((msg, idx) => {
-          const isOwn = msg.senderId === currentUser?.id;
+          const isOwn = (msg.senderId || msg.sender?.id) === currentUser?.id;
           const senderName = isOwn ? 'You' : msg.sender?.displayName || recipientName;
           const prevMsg = idx > 0 ? conversationMessages[idx - 1] : null;
           const showDateSep =
@@ -247,9 +247,18 @@ export default function DMConversationPage() {
 
                 {/* Message Bubble */}
                 <div className={cn('flex flex-col max-w-[75%]', isOwn ? 'items-end' : 'items-start')}>
-                  <div className="flex items-baseline gap-2 mb-1 px-1">
+                  <div className="flex items-center gap-2 mb-1 px-1">
                     <span className="text-xs font-medium text-slate-300">{senderName}</span>
                     <span className="text-[10px] text-slate-500">{formatTime(msg.createdAt)}</span>
+                    {isOwn && (
+                      <button
+                        onClick={() => deleteDirectMessage(dmId, msg.id)}
+                        className="text-slate-500 hover:text-red-400 p-0.5 rounded transition-colors ml-1"
+                        title="Delete message"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
                   <div
                     className={cn(
