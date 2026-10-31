@@ -4,15 +4,31 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   MessageSquare, Send, Smile, ArrowLeft, Shield, User as UserIcon, Trash2,
+  Phone, Video, Search, Info, Plus, Image as ImageIcon, Paperclip,
+  Mic, MicOff, Volume2, VolumeX, PhoneOff, VideoOff, Reply, Copy, Check,
+  X, CornerDownRight, Play, Pause, Sparkles, FileText, Code
 } from 'lucide-react';
 import { cn, formatTime, formatDate, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useDMStore, type DMMessage } from '@/stores/dm-store';
+import { useDMStore, type DMMessage, type SendDMOptions } from '@/stores/dm-store';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { User } from '@nexus/types';
 
-const EMOJI_GRID = ['😀', '😂', '😍', '😎', '🥳', '🤔', '👍', '❤️', '🔥', '🎉', '✨', '🚀', '💯', '👏', '🙏', '🙌'];
+const QUICK_REACTIONS = ['❤️', '👍', '😂', '🔥', '🎉', '🚀'];
+
+const EMOJI_CATEGORIES = {
+  'Popular': ['😀', '😂', '😍', '😎', '🥳', '🤔', '👍', '❤️', '🔥', '🎉', '✨', '🚀'],
+  'Reactions': ['🙌', '👏', '💯', '🤩', '😇', '👀', '💪', '🤝', '🙏', '🫡', '💡', '⚡'],
+  'Fun & Vibing': ['☕', '🍕', '🎮', '🎧', '🎸', '🌟', '🌈', '💎', '🎯', '🏆', '🍿', '🏖️'],
+};
+
+const STICKER_PRESETS = [
+  { name: 'Let’s Go! 🚀', url: 'https://images.unsplash.com/photo-1517976487507-5b3b4b45f942?w=400&auto=format&fit=crop&q=80', label: 'Rocket Launch' },
+  { name: 'Pure Fire 🔥', url: 'https://images.unsplash.com/photo-1527489377706-5bf97e608852?w=400&auto=format&fit=crop&q=80', label: 'Campfire Glow' },
+  { name: 'Big Idea 💡', url: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=400&auto=format&fit=crop&q=80', label: 'Creative Work' },
+  { name: 'Cheers! ☕', url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=400&auto=format&fit=crop&q=80', label: 'Coffee Vibe' },
+];
 
 export default function DMConversationPage() {
   const router = useRouter();
@@ -20,27 +36,51 @@ export default function DMConversationPage() {
   const dmId = params.dmId;
 
   const { user: currentUser } = useAuthStore();
-  const { messages, conversations, subscribeToConversation, sendDirectMessage, deleteDirectMessage } = useDMStore();
+  const {
+    messages,
+    conversations,
+    subscribeToConversation,
+    sendDirectMessage,
+    deleteDirectMessage,
+    toggleReaction,
+  } = useDMStore();
 
   const [input, setInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [recipient, setRecipient] = useState<User | null>(null);
   const [isLoadingRecipient, setIsLoadingRecipient] = useState(true);
   const [dmToDelete, setDmToDelete] = useState<DMMessage | null>(null);
 
+  // New Features State
+  const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<{ url: string; type: 'image' | 'file'; name?: string } | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [activeCall, setActiveCall] = useState<'voice' | 'video' | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Determine recipient UID from dmId: "uid1_uid2"
   const currentUserId = currentUser?.id || '';
   const [u1, u2] = dmId ? dmId.split('_') : ['', ''];
   const recipientId = u1 === currentUserId ? u2 : u1;
 
-  // Resolve recipient details (from existing conversation or fetch from Firestore)
+  // Resolve recipient details
   useEffect(() => {
     if (!recipientId) return;
 
-    // 1. Check if recipient details are already in a conversation in store
     const existingConv = conversations.find((c) => c.id === dmId);
     if (existingConv && existingConv.participantDetails?.[recipientId]) {
       const details = existingConv.participantDetails[recipientId];
@@ -57,7 +97,6 @@ export default function DMConversationPage() {
       return;
     }
 
-    // 2. Fetch directly from Firestore users collection
     async function fetchRecipientDoc() {
       setIsLoadingRecipient(true);
       try {
@@ -81,7 +120,6 @@ export default function DMConversationPage() {
         console.warn('Error fetching recipient user doc:', err);
       }
 
-      // Fallback
       setRecipient({
         id: recipientId,
         displayName: 'Community Member',
@@ -106,26 +144,75 @@ export default function DMConversationPage() {
     };
   }, [dmId, subscribeToConversation]);
 
+  // Call timer simulation
+  useEffect(() => {
+    if (!activeCall) {
+      setCallDuration(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setCallDuration((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [activeCall]);
+
+  // Recording timer simulation
+  useEffect(() => {
+    if (!isRecording) {
+      setRecordingSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setRecordingSeconds((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isRecording]);
+
   const conversationMessages = (dmId ? messages[dmId] : []) ?? [];
+
+  // Filter messages if search is active
+  const filteredMessages = searchQuery.trim()
+    ? conversationMessages.filter((m) =>
+        m.content.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : conversationMessages;
 
   // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversationMessages.length]);
 
+  // Send Direct Message
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !currentUser || !recipient) return;
+    if ((!text && !selectedAttachment) || !currentUser || !recipient) return;
+
+    const options: SendDMOptions = {};
+    if (selectedAttachment) {
+      options.attachmentUrl = selectedAttachment.url;
+      options.attachmentType = selectedAttachment.type;
+      options.attachmentName = selectedAttachment.name;
+    }
+    if (replyingTo) {
+      options.replyTo = {
+        id: replyingTo.id,
+        senderName: replyingTo.sender?.displayName || 'User',
+        content: replyingTo.content.slice(0, 100),
+      };
+    }
 
     setInput('');
+    setSelectedAttachment(null);
+    setReplyingTo(null);
     setShowEmojiPicker(false);
+    setShowAttachMenu(false);
 
     try {
-      await sendDirectMessage(currentUser, recipient, text);
+      await sendDirectMessage(currentUser, recipient, text, options);
     } catch (err) {
       console.error('Failed to send DM:', err);
     }
-  }, [input, currentUser, recipient, sendDirectMessage]);
+  }, [input, selectedAttachment, replyingTo, currentUser, recipient, sendDirectMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -134,12 +221,68 @@ export default function DMConversationPage() {
     }
   };
 
+  // Image Upload Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setSelectedAttachment({
+          url: reader.result,
+          type: file.type.startsWith('image/') ? 'image' : 'file',
+          name: file.name,
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    setShowAttachMenu(false);
+  };
+
+  // Voice Note Send Simulation
+  const handleSendVoiceNote = async () => {
+    setIsRecording(false);
+    if (!currentUser || !recipient) return;
+    try {
+      await sendDirectMessage(currentUser, recipient, '🎵 Voice note (0:08)', {
+        attachmentType: 'audio',
+        attachmentUrl: 'voice-note-sample',
+      });
+    } catch (err) {
+      console.error('Failed to send voice note:', err);
+    }
+  };
+
+  // Copy text to clipboard
+  const handleCopyText = (text: string, msgId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
   const recipientName = recipient?.displayName || recipient?.username || 'User';
+  const effectiveStatus = getUserEffectiveStatus(recipient, currentUser?.id);
+
+  const formatCallTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div className="flex h-full flex-col bg-[hsl(var(--bg-base))]">
+    <div className="flex h-full flex-col bg-[hsl(var(--bg-base))] relative overflow-hidden">
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* DM Header */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/8 px-4 bg-[hsl(var(--bg-raised))]">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/8 px-4 bg-[hsl(var(--bg-raised))] relative z-20">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => router.push('/messages')}
@@ -149,70 +292,171 @@ export default function DMConversationPage() {
             <ArrowLeft size={18} />
           </button>
 
-          <div className="relative shrink-0">
+          <div
+            onClick={() => setShowProfileModal(true)}
+            className="relative shrink-0 cursor-pointer group"
+          >
             {recipient?.avatar ? (
               <img
                 src={recipient.avatar}
                 alt={recipientName}
-                className="h-9 w-9 rounded-full object-cover"
+                className="h-9 w-9 rounded-full object-cover group-hover:ring-2 group-hover:ring-brand-500 transition-all"
               />
             ) : (
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white">
+              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white group-hover:ring-2 group-hover:ring-brand-500 transition-all">
                 {getInitials(recipientName)}
               </div>
             )}
             <span
               className={cn(
                 'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
-                getUserEffectiveStatus(recipient, currentUser?.id) === 'offline' ? 'bg-gray-500' : 'bg-green-400'
+                effectiveStatus === 'offline' ? 'bg-gray-500' : 'bg-emerald-400'
               )}
             />
           </div>
 
-          <div className="min-w-0 flex flex-col">
+          <div
+            onClick={() => setShowProfileModal(true)}
+            className="min-w-0 flex flex-col cursor-pointer hover:opacity-90"
+          >
             <span className="font-semibold text-white text-sm truncate flex items-center gap-1.5">
               {recipientName}
               {recipient?.isVerified && <Shield size={13} className="text-blue-400" />}
             </span>
-            <span className="text-[11px] text-slate-400">
-              {recipient?.username ? `@${recipient.username}` : 'Direct Message'}
+            <span className="text-[11px] text-slate-400 flex items-center gap-1">
+              <span className={cn('w-1.5 h-1.5 rounded-full', effectiveStatus === 'offline' ? 'bg-gray-500' : 'bg-emerald-400')} />
+              <span className="capitalize">{effectiveStatus}</span>
+              {recipient?.username && <span className="text-slate-600">· @{recipient.username}</span>}
             </span>
           </div>
         </div>
+
+        {/* Header Action Suite: Voice Call, Video Call, Search, Profile */}
+        <div className="flex items-center gap-1">
+          {/* Start Voice Call */}
+          <button
+            onClick={() => setActiveCall('voice')}
+            className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            title="Start Voice Call"
+          >
+            <Phone size={17} />
+          </button>
+
+          {/* Start Video Call */}
+          <button
+            onClick={() => setActiveCall('video')}
+            className="p-2 rounded-xl text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+            title="Start Video Call"
+          >
+            <Video size={18} />
+          </button>
+
+          {/* Search in DM */}
+          <button
+            onClick={() => {
+              setShowSearch(!showSearch);
+              if (showSearch) setSearchQuery('');
+            }}
+            className={cn(
+              'p-2 rounded-xl transition-colors',
+              showSearch ? 'bg-brand-500/20 text-brand-400' : 'text-slate-400 hover:text-white hover:bg-white/10'
+            )}
+            title="Search Messages"
+          >
+            <Search size={17} />
+          </button>
+
+          {/* User Info / Profile Drawer */}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="View Profile Details"
+          >
+            <Info size={17} />
+          </button>
+        </div>
       </div>
+
+      {/* Search Bar Overlay */}
+      {showSearch && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-[hsl(var(--bg-base))] border-b border-white/5 animate-slide-down">
+          <Search size={14} className="text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search in this conversation..."
+            className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
+            autoFocus
+          />
+          {searchQuery && (
+            <span className="text-[11px] text-slate-400 font-medium mr-2">
+              {filteredMessages.length} match{filteredMessages.length !== 1 ? 'es' : ''}
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setShowSearch(false);
+            }}
+            className="p-1 text-slate-400 hover:text-white"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
         {/* Beginning of conversation banner */}
-        <div className="py-8 px-4 text-center border-b border-white/5 mb-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-3">
-            {recipient?.avatar ? (
-              <img
-                src={recipient.avatar}
-                alt={recipientName}
-                className="w-14 h-14 rounded-full object-cover"
-              />
-            ) : (
-              <UserIcon size={30} className="text-indigo-400" />
-            )}
+        {!searchQuery && (
+          <div className="py-8 px-4 text-center border-b border-white/5 mb-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-3 shadow-lg">
+              {recipient?.avatar ? (
+                <img
+                  src={recipient.avatar}
+                  alt={recipientName}
+                  className="w-14 h-14 rounded-full object-cover"
+                />
+              ) : (
+                <UserIcon size={30} className="text-indigo-400" />
+              )}
+            </div>
+            <h2 className="text-lg font-bold text-white mb-1">{recipientName}</h2>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              This is the start of your direct message history with <strong className="text-slate-200">{recipientName}</strong>.
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <button
+                onClick={() => setActiveCall('voice')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors"
+              >
+                <Phone size={12} /> Voice Call
+              </button>
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs font-semibold border border-indigo-500/20 transition-colors"
+              >
+                <UserIcon size={12} /> View Profile
+              </button>
+            </div>
           </div>
-          <h2 className="text-lg font-bold text-white mb-1">{recipientName}</h2>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            This is the start of your direct message history with <strong className="text-slate-200">{recipientName}</strong>.
-          </p>
-        </div>
+        )}
 
         {/* Message bubbles */}
-        {conversationMessages.map((msg, idx) => {
+        {filteredMessages.map((msg, idx) => {
           const isOwn = (msg.senderId || msg.sender?.id) === currentUser?.id;
           const senderName = isOwn ? 'You' : msg.sender?.displayName || recipientName;
-          const prevMsg = idx > 0 ? conversationMessages[idx - 1] : null;
+          const prevMsg = idx > 0 ? filteredMessages[idx - 1] : null;
           const showDateSep =
             !prevMsg ||
             new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
 
+          const reactions = msg.reactions || {};
+          const hasReactions = Object.keys(reactions).length > 0;
+
           return (
-            <div key={msg.id} className="space-y-2">
+            <div key={msg.id} className="space-y-1 group relative">
               {showDateSep && (
                 <div className="my-4 flex items-center gap-3 px-3">
                   <div className="flex-1 border-t border-white/8" />
@@ -223,6 +467,60 @@ export default function DMConversationPage() {
                 </div>
               )}
 
+              {/* Floating Quick Action Bar on Hover */}
+              <div
+                className={cn(
+                  'absolute -top-3.5 z-20 hidden group-hover:flex items-center gap-0.5 rounded-xl border border-white/10 bg-[hsl(var(--bg-overlay))] p-1 shadow-xl backdrop-blur-md',
+                  isOwn ? 'right-4' : 'left-4'
+                )}
+              >
+                {/* 4 Quick reaction buttons */}
+                {QUICK_REACTIONS.slice(0, 4).map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => currentUser?.id && toggleReaction(dmId, msg.id, emoji, currentUser.id)}
+                    className="p-1 hover:scale-125 transition-transform text-xs"
+                    title={`React ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+
+                <div className="w-px h-3.5 bg-white/10 mx-1" />
+
+                {/* Reply */}
+                <button
+                  onClick={() => {
+                    setReplyingTo(msg);
+                    composerRef.current?.focus();
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                  title="Reply to message"
+                >
+                  <Reply size={13} />
+                </button>
+
+                {/* Copy */}
+                <button
+                  onClick={() => handleCopyText(msg.content, msg.id)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                  title="Copy text"
+                >
+                  {copiedMsgId === msg.id ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
+
+                {/* Delete (if own) */}
+                {isOwn && (
+                  <button
+                    onClick={() => setDmToDelete(msg)}
+                    className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+                    title="Delete message"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+
               <div className={cn('flex items-start gap-3', isOwn ? 'flex-row-reverse' : 'flex-row')}>
                 {/* Avatar */}
                 <div className="relative shrink-0 mt-0.5">
@@ -230,12 +528,12 @@ export default function DMConversationPage() {
                     <img
                       src={msg.sender.avatar}
                       alt={senderName}
-                      className="h-8 w-8 rounded-full object-cover"
+                      className="h-8 w-8 rounded-full object-cover ring-1 ring-white/10"
                     />
                   ) : (
                     <div
                       className={cn(
-                        'h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white',
+                        'h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm',
                         isOwn
                           ? 'bg-gradient-to-br from-brand-500 to-indigo-600'
                           : 'bg-gradient-to-br from-violet-500 to-purple-600'
@@ -246,31 +544,115 @@ export default function DMConversationPage() {
                   )}
                 </div>
 
-                {/* Message Bubble */}
+                {/* Message Bubble Column */}
                 <div className={cn('flex flex-col max-w-[75%]', isOwn ? 'items-end' : 'items-start')}>
+                  {/* Sender Name & Time */}
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <span className="text-xs font-medium text-slate-300">{senderName}</span>
                     <span className="text-[10px] text-slate-500">{formatTime(msg.createdAt)}</span>
                     {isOwn && (
-                      <button
-                        onClick={() => setDmToDelete(msg)}
-                        className="text-slate-500 hover:text-red-400 p-0.5 rounded transition-colors ml-1"
-                        title="Delete message"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <span className="text-[11px] text-indigo-400 font-bold" title="Delivered">
+                        ✓✓
+                      </span>
                     )}
                   </div>
-                  <div
-                    className={cn(
-                      'rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm',
-                      isOwn
-                        ? 'bg-brand-500 text-white rounded-tr-sm'
-                        : 'bg-[hsl(var(--bg-raised))] text-slate-200 border border-white/8 rounded-tl-sm'
-                    )}
-                  >
-                    {msg.content}
-                  </div>
+
+                  {/* Quoted Reply Preview */}
+                  {msg.replyTo && (
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs mb-1 max-w-full truncate border border-white/5',
+                        isOwn ? 'bg-brand-600/30 text-indigo-200' : 'bg-white/5 text-slate-400'
+                      )}
+                    >
+                      <CornerDownRight size={12} className="shrink-0 text-slate-400" />
+                      <span className="font-semibold text-slate-300 truncate shrink-0">
+                        @{msg.replyTo.senderName}:
+                      </span>
+                      <span className="truncate italic">"{msg.replyTo.content}"</span>
+                    </div>
+                  )}
+
+                  {/* Attached Image or Media */}
+                  {msg.attachmentUrl && (
+                    <div className="mb-1.5 rounded-2xl overflow-hidden border border-white/10 max-w-sm shadow-md">
+                      {msg.attachmentType === 'audio' ? (
+                        <div className="flex items-center gap-3 p-3 bg-[hsl(var(--bg-raised))]">
+                          <button
+                            onClick={() =>
+                              setPlayingAudioId(playingAudioId === msg.id ? null : msg.id)
+                            }
+                            className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white shadow-md hover:scale-105 transition-transform shrink-0"
+                          >
+                            {playingAudioId === msg.id ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+                          </button>
+                          <div className="flex-1 min-w-[120px]">
+                            <div className="flex items-center gap-1 h-5">
+                              {[30, 60, 45, 90, 75, 40, 85, 95, 50, 70, 35, 80, 60, 40].map((h, i) => (
+                                <span
+                                  key={i}
+                                  className={cn(
+                                    'w-1 rounded-full transition-all',
+                                    playingAudioId === msg.id ? 'bg-brand-400 animate-pulse' : 'bg-slate-600'
+                                  )}
+                                  style={{ height: `${h}%` }}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-slate-400">0:08 · Voice message</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={msg.attachmentUrl}
+                          alt="Attachment"
+                          className="w-full max-h-72 object-cover hover:scale-[1.02] transition-transform cursor-pointer"
+                          onClick={() => window.open(msg.attachmentUrl, '_blank')}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Text Content */}
+                  {msg.content && (
+                    <div
+                      className={cn(
+                        'rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm transition-all',
+                        isOwn
+                          ? 'bg-brand-500 text-white rounded-tr-sm'
+                          : 'bg-[hsl(var(--bg-raised))] text-slate-200 border border-white/8 rounded-tl-sm'
+                      )}
+                    >
+                      {msg.content}
+                    </div>
+                  )}
+
+                  {/* Reaction Pills */}
+                  {hasReactions && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {Object.entries(reactions).map(([emoji, uids]) => {
+                        const count = uids.length;
+                        const hasReacted = currentUser?.id ? uids.includes(currentUser.id) : false;
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() =>
+                              currentUser?.id && toggleReaction(dmId, msg.id, emoji, currentUser.id)
+                            }
+                            className={cn(
+                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border transition-all active:scale-95',
+                              hasReacted
+                                ? 'bg-brand-500/20 border-brand-500/40 text-brand-300'
+                                : 'bg-[hsl(var(--bg-raised))] border-white/10 text-slate-300 hover:bg-white/10'
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            <span className="text-[11px] font-bold">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -279,9 +661,129 @@ export default function DMConversationPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer */}
-      <div className="shrink-0 p-4 bg-[hsl(var(--bg-raised))] border-t border-white/5">
+      {/* Replying Banner */}
+      {replyingTo && (
+        <div className="px-4 py-2 bg-[hsl(var(--bg-overlay))] border-t border-white/10 flex items-center justify-between animate-slide-up text-xs">
+          <div className="flex items-center gap-2 text-slate-300 truncate">
+            <Reply size={14} className="text-brand-400 shrink-0" />
+            <span>Replying to <strong className="text-white">@{replyingTo.sender?.displayName}</strong>:</span>
+            <span className="text-slate-400 truncate italic">"{replyingTo.content}"</span>
+          </div>
+          <button
+            onClick={() => setReplyingTo(null)}
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Attachment Preview Banner */}
+      {selectedAttachment && (
+        <div className="px-4 py-2 bg-[hsl(var(--bg-overlay))] border-t border-white/10 flex items-center justify-between animate-slide-up text-xs">
+          <div className="flex items-center gap-3">
+            {selectedAttachment.type === 'image' && (
+              <img
+                src={selectedAttachment.url}
+                alt="Upload preview"
+                className="w-12 h-12 rounded-lg object-cover border border-white/10 shadow"
+              />
+            )}
+            <div>
+              <p className="font-semibold text-white">{selectedAttachment.name || 'Image attachment'}</p>
+              <p className="text-[10px] text-emerald-400">Ready to send with your message</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSelectedAttachment(null)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Voice Recording Banner */}
+      {isRecording && (
+        <div className="px-4 py-3 bg-red-950/40 border-t border-red-500/30 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-2.5 text-xs text-red-300 font-medium">
+            <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
+            <span>Recording audio message: {formatCallTime(recordingSeconds)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsRecording(false)}
+              className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/10"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendVoiceNote}
+              className="px-3.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-bold shadow-md shadow-red-500/20"
+            >
+              Send Voice Note
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Composer Section */}
+      <div className="shrink-0 p-4 bg-[hsl(var(--bg-raised))] border-t border-white/5 relative z-10">
         <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-[hsl(var(--bg-base))] p-2 focus-within:border-brand-500/40 transition-colors">
+          {/* Plus / Attachment Menu Button */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => {
+                setShowAttachMenu(!showAttachMenu);
+                setShowEmojiPicker(false);
+              }}
+              className={cn(
+                'p-2 rounded-xl transition-colors',
+                showAttachMenu ? 'bg-brand-500/20 text-brand-400' : 'text-slate-400 hover:text-white hover:bg-white/10'
+              )}
+              title="Add attachment or sticker"
+            >
+              <Plus size={18} />
+            </button>
+
+            {/* Attachment Dropdown Menu */}
+            {showAttachMenu && (
+              <div className="absolute bottom-full left-0 mb-3 w-64 rounded-2xl border border-white/10 bg-[hsl(var(--bg-overlay))] p-2.5 shadow-2xl z-50 animate-scale-up">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 py-1 mb-1">
+                  Add to message
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left"
+                >
+                  <ImageIcon size={16} className="text-brand-400" />
+                  <span>Upload Photo / Image</span>
+                </button>
+
+                <div className="my-1.5 border-t border-white/5" />
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 py-1 mb-1">
+                  Quick Stickers & Memes
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 p-1">
+                  {STICKER_PRESETS.map((st) => (
+                    <button
+                      key={st.name}
+                      onClick={() => {
+                        setSelectedAttachment({ url: st.url, type: 'image', name: st.name });
+                        setShowAttachMenu(false);
+                      }}
+                      className="flex flex-col items-center p-1.5 rounded-xl hover:bg-white/10 transition-colors text-center group"
+                    >
+                      <img src={st.url} alt="" className="w-12 h-12 rounded-lg object-cover mb-1 group-hover:scale-105 transition-transform" />
+                      <span className="text-[10px] text-slate-300 font-semibold">{st.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Textarea */}
           <textarea
             ref={composerRef}
             value={input}
@@ -293,30 +795,59 @@ export default function DMConversationPage() {
             style={{ lineHeight: '1.4rem' }}
           />
 
-          {/* Emoji button & picker */}
+          {/* Voice Note Button */}
+          <button
+            onClick={() => setIsRecording(!isRecording)}
+            className={cn(
+              'p-2 rounded-xl transition-colors shrink-0',
+              isRecording ? 'text-red-400 bg-red-500/15' : 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10'
+            )}
+            title="Record Voice Note"
+          >
+            <Mic size={18} />
+          </button>
+
+          {/* Emoji button & Categorized Picker */}
           <div className="relative shrink-0">
             <button
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-xl transition-colors"
+              onClick={() => {
+                setShowEmojiPicker(!showEmojiPicker);
+                setShowAttachMenu(false);
+              }}
+              className={cn(
+                'p-2 rounded-xl transition-colors',
+                showEmojiPicker ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-amber-400 hover:bg-amber-500/10'
+              )}
               title="Add emoji"
             >
               <Smile size={18} />
             </button>
+
             {showEmojiPicker && (
-              <div className="absolute bottom-full right-0 mb-2 w-64 rounded-2xl border border-white/10 bg-[hsl(var(--bg-overlay))] p-3 shadow-2xl z-50">
-                <div className="grid grid-cols-8 gap-1">
-                  {EMOJI_GRID.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        setInput((v) => v + emoji);
-                        setShowEmojiPicker(false);
-                        composerRef.current?.focus();
-                      }}
-                      className="rounded-lg p-1 text-lg hover:bg-white/10 transition-colors"
-                    >
-                      {emoji}
-                    </button>
+              <div className="absolute bottom-full right-0 mb-3 w-72 rounded-2xl border border-white/10 bg-[hsl(var(--bg-overlay))] p-3 shadow-2xl z-50 animate-scale-up">
+                <div className="text-xs font-bold text-slate-300 mb-2">Emojis</div>
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                  {Object.entries(EMOJI_CATEGORIES).map(([cat, list]) => (
+                    <div key={cat}>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        {cat}
+                      </span>
+                      <div className="grid grid-cols-6 gap-1">
+                        {list.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              setInput((v) => v + emoji);
+                              setShowEmojiPicker(false);
+                              composerRef.current?.focus();
+                            }}
+                            className="rounded-lg p-1.5 text-lg hover:bg-white/10 hover:scale-110 transition-all"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -326,19 +857,182 @@ export default function DMConversationPage() {
           {/* Send button */}
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() && !selectedAttachment}
             className={cn(
               'shrink-0 p-2 rounded-xl transition-all',
-              input.trim()
-                ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-md shadow-brand-500/20'
+              input.trim() || selectedAttachment
+                ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-md shadow-brand-500/20 hover:scale-105 active:scale-95 cursor-pointer'
                 : 'text-slate-600 cursor-not-allowed'
             )}
-            title="Send"
+            title="Send Message"
           >
             <Send size={18} />
           </button>
         </div>
       </div>
+
+      {/* Voice / Video Call Modal */}
+      {activeCall && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-7 shadow-2xl text-center relative overflow-hidden">
+            {/* Ambient visual gradient */}
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-brand-500/20 blur-3xl pointer-events-none" />
+
+            {/* Recipient Avatar & Pulse Wave */}
+            <div className="relative mb-5 inline-block">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 p-1 shadow-2xl relative">
+                {recipient?.avatar ? (
+                  <img
+                    src={recipient.avatar}
+                    alt={recipientName}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center text-3xl font-bold text-white">
+                    {getInitials(recipientName)}
+                  </div>
+                )}
+                {/* Active audio ripple animation */}
+                <span className="animate-ping absolute inset-0 rounded-full border-2 border-emerald-400 opacity-60 pointer-events-none" />
+              </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-1">{recipientName}</h3>
+            <p className="text-xs text-emerald-400 font-semibold mb-4">
+              {activeCall === 'voice' ? '📞 Voice Call Connected' : '📹 Video Call Connected'}
+            </p>
+            <p className="text-2xl font-mono text-slate-200 mb-8">{formatCallTime(callDuration)}</p>
+
+            {/* Audio Wave Bars */}
+            <div className="flex items-center justify-center gap-1.5 h-10 mb-8">
+              {[40, 70, 50, 90, 80, 45, 100, 60, 85, 40, 75, 55].map((h, i) => (
+                <span
+                  key={i}
+                  className="w-1.5 bg-brand-400 rounded-full animate-pulse"
+                  style={{
+                    height: `${h}%`,
+                    animationDelay: `${i * 0.1}s`,
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Controls Suite */}
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() => setIsMuted(!isMuted)}
+                className={cn(
+                  'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
+                  isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+                )}
+                title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
+              >
+                {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+
+              <button
+                onClick={() => setIsDeafened(!isDeafened)}
+                className={cn(
+                  'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
+                  isDeafened ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+                )}
+                title={isDeafened ? 'Undeafen' : 'Deafen'}
+              >
+                {isDeafened ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+
+              {activeCall === 'video' && (
+                <button
+                  onClick={() => setIsCameraOff(!isCameraOff)}
+                  className={cn(
+                    'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
+                    isCameraOff ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+                  )}
+                  title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
+                >
+                  {isCameraOff ? <VideoOff size={20} /> : <Video size={20} />}
+                </button>
+              )}
+
+              {/* End Call */}
+              <button
+                onClick={() => setActiveCall(null)}
+                className="w-14 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95 transition-all"
+                title="End Call"
+              >
+                <PhoneOff size={24} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recipient Profile Modal */}
+      {showProfileModal && recipient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[hsl(var(--bg-raised))] p-6 shadow-2xl relative">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="text-center pt-2">
+              <div className="relative inline-block mb-3">
+                {recipient.avatar ? (
+                  <img
+                    src={recipient.avatar}
+                    alt={recipientName}
+                    className="w-20 h-20 rounded-2xl object-cover ring-4 ring-indigo-500/30 mx-auto shadow-xl"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-2xl font-bold text-white mx-auto shadow-xl">
+                    {getInitials(recipientName)}
+                  </div>
+                )}
+                <span
+                  className={cn(
+                    'absolute -bottom-1 -right-1 w-4 h-4 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
+                    effectiveStatus === 'offline' ? 'bg-gray-500' : 'bg-emerald-400'
+                  )}
+                />
+              </div>
+
+              <h3 className="text-lg font-bold text-white">{recipientName}</h3>
+              <p className="text-xs text-slate-400 mb-3">@{recipient.username || 'user'}</p>
+
+              <div className="p-3.5 rounded-2xl bg-[hsl(var(--bg-base))] border border-white/5 text-left mb-4 text-xs text-slate-300">
+                <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider block mb-1">
+                  About
+                </span>
+                <p>{recipient.bio || 'Active Nexus community member.'}</p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setActiveCall('voice');
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                >
+                  <Phone size={14} /> Voice Call
+                </button>
+                <button
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setActiveCall('video');
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors shadow-md shadow-brand-500/20"
+                >
+                  <Video size={14} /> Video Call
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DM Delete Confirmation Modal */}
       {dmToDelete && (
