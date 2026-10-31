@@ -30,7 +30,8 @@ function GoogleAuthInner() {
       if (err?.code === 'auth/popup-closed-by-user') {
         setErrorMsg('Sign-in cancelled. Please click "Continue with Google" again.');
       } else if (err?.code === 'auth/unauthorized-domain') {
-        const host = typeof window !== 'undefined' ? window.location.hostname : 'preview.vercel.app';\n        setErrorMsg(`Domain "${host}" is not authorized in Firebase Console. Please add "${host}" to Authorized Domains or switch to your main production URL.`);
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'preview.vercel.app';
+        setErrorMsg(`Domain "${host}" is not authorized in Firebase Console. Please add "${host}" to Authorized Domains or switch to your main production URL.`);
       } else if (err?.code === 'auth/operation-not-allowed') {
         setErrorMsg('Google sign-in is not enabled in Firebase Console. Please enable Google provider in Authentication.');
       } else {
