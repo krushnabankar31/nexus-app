@@ -15,6 +15,7 @@ import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { CreateCommunityModal } from "@/components/modals/create-community-modal";
 import { DeleteCommunityModal } from "@/components/modals/delete-community-modal";
 import { PresenceManager } from "@/components/presence/presence-manager";
+import { CallManager } from "@/components/calls/call-manager";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -168,6 +169,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Global Real-Time Presence & Heartbeat */}
       <PresenceManager />
+
+      {/* Global Real-Time WebRTC Call Manager */}
+      <CallManager />
     </div>
   );
 }
