@@ -563,14 +563,7 @@ function SettingsSection({ community }: { community: any }) {
           <div className="border-t border-red-500/10" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-white flex items-center gap-2">
-                <span>Delete Community</span>
-                {hasPower && (
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                    Admin Power
-                  </span>
-                )}
-              </div>
+              <div className="text-sm text-white">Delete Community</div>
               <div className="text-xs text-slate-500">
                 {hasPower
                   ? 'Permanently delete this community, all channels, and messages'

@@ -431,19 +431,17 @@ export function ChannelSidebar() {
 
                 <div className="my-1 border-t border-white/8" />
 
-                {/* Delete Community (Owner / Admin Power) */}
+                {/* Delete Community */}
                 {hasDeletePower ? (
                   <button
                     onClick={() => {
                       setShowCommunityMenu(false);
                       openDeleteCommunityModal(community as any);
                     }}
-                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-600 hover:text-white transition-colors group"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-600 hover:text-white transition-colors group"
                   >
-                    <span className="flex items-center gap-2">
-                      <Trash2 size={14} /> Delete Community
-                    </span>
-                    <span className="text-[10px] opacity-75 font-normal">Admin Power</span>
+                    <Trash2 size={14} />
+                    <span>Delete Community</span>
                   </button>
                 ) : (
                   <button
