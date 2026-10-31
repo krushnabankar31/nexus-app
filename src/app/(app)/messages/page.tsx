@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageSquare, Plus, Search, Users, X, Shield, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDMStore, getConversationId } from '@/stores/dm-store';
-import { cn, getInitials, formatTime } from '@/lib/utils';
+import { cn, getInitials, formatTime, getUserEffectiveStatus } from '@/lib/utils';
 import type { User } from '@nexus/types';
 
 export default function MessagesIndexPage() {
@@ -142,7 +142,7 @@ export default function MessagesIndexPage() {
                     <span
                       className={cn(
                         'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
-                        details.status === 'offline' ? 'bg-gray-500' : 'bg-green-400'
+                        getUserEffectiveStatus(details, currentUser?.id) === 'offline' ? 'bg-gray-500' : 'bg-green-400'
                       )}
                     />
                   </div>
@@ -246,7 +246,7 @@ export default function MessagesIndexPage() {
                           <span
                             className={cn(
                               'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
-                              u.status === 'offline' ? 'bg-gray-500' : 'bg-green-400'
+                              getUserEffectiveStatus(u, currentUser?.id) === 'offline' ? 'bg-gray-500' : 'bg-green-400'
                             )}
                           />
                         </div>

@@ -232,7 +232,7 @@ export function MemberPanel() {
                     {getInitials(selectedUser.displayName || 'User')}
                   </div>
                 )}
-                <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-green-400 ring-2 ring-[hsl(var(--bg-raised))]" />
+                <span className={cn('absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-[hsl(var(--bg-raised))]', getUserEffectiveStatus(selectedUser, currentUser?.id) === 'offline' ? 'bg-gray-500' : 'bg-green-400')} />
               </div>
 
               <h4 className="font-bold text-white text-base">

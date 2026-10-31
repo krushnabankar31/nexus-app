@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 import { cn, generateId } from '@/lib/utils';
-import { MOCK_COMMUNITIES } from '@/lib/mock-data';
+import { useCommunityStore } from '@/stores/community-store';
 
 const AVATAR_SEEDS = ['Felix', 'Mia', 'Jasper', 'Nala', 'Leo', 'Zoe', 'Max', 'Lily'];
 const AVATAR_URL = (seed: string) => `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,ffd5dc,ffdfbf`;
@@ -31,6 +31,7 @@ const STEP_LABELS = ['Profile Setup', 'Your Interests', 'Join Communities', "You
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { communities } = useCommunityStore();
   const [step, setStep] = useState(1);
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_SEEDS[0]);
   const [displayName, setDisplayName] = useState('');
@@ -187,8 +188,9 @@ export default function OnboardingPage() {
               <h1 className="mb-1 text-3xl font-bold text-white">Communities for you 💫</h1>
               <p className="mb-6 text-gray-400">Join some communities to start connecting with people who share your interests.</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {MOCK_COMMUNITIES.map((community) => {
+                {(communities.length > 0 ? communities : []).map((community) => {
                   const isJoined = joinedCommunities.has(community.id);
+                  const count = (community as any).memberCount || 1;
                   return (
                     <div
                       key={community.id}
@@ -202,7 +204,7 @@ export default function OnboardingPage() {
                           <span className="text-2xl">{community.icon ?? '🌐'}</span>
                           <div>
                             <p className="font-semibold text-sm text-white">{community.name}</p>
-                            <p className="text-[11px] text-gray-500">{community.memberCount.toLocaleString()} members</p>
+                            <p className="text-[11px] text-gray-500">{count.toLocaleString()} members</p>
                           </div>
                         </div>
                         <button

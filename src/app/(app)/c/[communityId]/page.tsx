@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 
 const COMMUNITY_RULES = [
   'Be respectful — no hate speech, harassment, or toxicity',
@@ -35,7 +36,9 @@ export default function CommunityPage() {
       isVerified: false,
     };
 
-  const onlineMembers = members.filter((m) => m.user?.status !== 'offline');
+  const onlineMembers = members.filter(
+    (m) => m.user && getUserEffectiveStatus(m.user, currentUser?.id) !== 'offline'
+  );
   const accentColor = community.accentColor ?? '#6366f1';
   const memberCount = Math.max(members.length, community.memberCount ?? 1);
   const onlineCount = Math.max(onlineMembers.length, 1);
@@ -120,7 +123,7 @@ export default function CommunityPage() {
           <section>
             <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
               <span className="h-2 w-2 rounded-full bg-green-400" /> Online Members
-              <span className="ml-1 text-sm font-normal text-gray-400">({onlineMembers.length || 1})</span>
+              <span className="ml-1 text-sm font-normal text-gray-400">({onlineCount})</span>
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {(onlineMembers.length > 0 ? onlineMembers : [
@@ -134,6 +137,7 @@ export default function CommunityPage() {
                 if (!u) return null;
                 const role = m.roles?.[0];
                 const name = u.displayName || u.username || 'Member';
+                const effStatus = getUserEffectiveStatus(u, currentUser?.id);
                 return (
                   <div key={m.userId} className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-3 text-center">
                     <div className="relative">
@@ -141,10 +145,10 @@ export default function CommunityPage() {
                         <img src={u.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
                       ) : (
                         <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white">
-                          {name.slice(0, 2).toUpperCase()}
+                          {getInitials(name)}
                         </div>
                       )}
-                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-400 ring-2 ring-[hsl(var(--bg-raised))]" />
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${effStatus === 'offline' ? 'bg-gray-500' : 'bg-green-400'} ring-2 ring-[hsl(var(--bg-raised))]`} />
                     </div>
                     <span className="text-xs font-medium text-white truncate w-full">{name}</span>
                     {role && (
