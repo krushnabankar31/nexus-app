@@ -1,440 +1,499 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import {
-  Twitter, Github, Globe, Youtube, MessageSquare, UserPlus, MoreHorizontal,
-  Edit3, Award, Lock, ChevronDown, ChevronUp,
-  Calendar, Users, TrendingUp, CheckCircle, Clock, Flame,
-  Crown, BookOpen, MessageCircle, ThumbsUp, Eye, ExternalLink
+  MessageSquare, Edit3, Calendar, Users, Shield, Crown,
+  Mail, Check, X, Sparkles, Hash, ArrowRight
 } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth-store';
+import { useCommunityStore } from '@/stores/community-store';
+import { useDMStore, getConversationId } from '@/stores/dm-store';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { cn, getInitials, formatDate } from '@/lib/utils';
+import type { User } from '@nexus/types';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_USER = {
-  id: 'u_42',
-  displayName: 'Aurora Vex',
-  username: 'auroravex',
-  pronouns: 'she/her',
-  bio: `Full-stack developer & open-source contributor. I build things that matter. 
-Currently working on distributed systems and WebAssembly experiments. 
-When I'm not coding, you'll find me contributing to community projects, 
-hiking, or playing bass guitar. Always happy to chat about tech, music, or anything in between. 
-DMs open for collaboration! 🚀`,
-  bannerColor: 'from-violet-900 via-indigo-900 to-slate-900',
-  avatarInitials: 'AV',
-  avatarColor: 'from-violet-500 to-indigo-500',
-  status: 'online' as 'online' | 'idle' | 'dnd' | 'offline',
-  isOwn: false,
-  memberSince: 'March 12, 2022',
-  communitiesCount: 14,
-  reputation: { level: 'Expert', xp: 8420, nextLevelXp: 10000, levelNum: 7 },
-  social: {
-    twitter: 'auroravex',
-    github: 'aurora-vex',
-    website: 'https://auroravex.dev',
-    youtube: 'auroravexdev',
-  },
-  badges: [
-    { id: 'b1', icon: '🏆', label: 'Top Contributor', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30' },
-    { id: 'b2', icon: '⚡', label: 'Early Adopter', color: 'text-violet-400', bg: 'bg-violet-400/10 border-violet-400/30' },
-    { id: 'b3', icon: '🛡️', label: 'Moderator', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/30' },
-    { id: 'b4', icon: '🔥', label: '365-Day Streak', color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
-    { id: 'b5', icon: '💎', label: 'Premium Member', color: 'text-cyan-400', bg: 'bg-cyan-400/10 border-cyan-400/30' },
-  ],
-};
-
-const MOCK_COMMUNITIES = [
-  { id: 'c1', name: 'TypeScript Masters', icon: '⚙️', members: 12400, role: 'Moderator', color: 'from-blue-600 to-indigo-600' },
-  { id: 'c2', name: 'Open Source Hub', icon: '🌐', members: 34200, role: 'Member', color: 'from-green-600 to-teal-600' },
-  { id: 'c3', name: 'WebAssembly Explorers', icon: '🚀', members: 5800, role: 'Admin', color: 'from-orange-600 to-red-600' },
-  { id: 'c4', name: 'Design Systems', icon: '🎨', members: 9100, role: 'Member', color: 'from-pink-600 to-rose-600' },
-];
-
-const MOCK_ACTIVITY = [
-  { id: 'a1', community: 'TypeScript Masters', content: 'Shared a solution for async iterator typing with mapped conditional types...', time: '2h ago', type: 'post', likes: 47 },
-  { id: 'a2', community: 'Open Source Hub', content: 'Opened a PR: feat(parser): add streaming JSON parser with 10x perf improvement', time: '5h ago', type: 'pr', likes: 23 },
-  { id: 'a3', community: 'WebAssembly Explorers', content: 'Replied to "WASM vs native performance benchmarks" — Great benchmarks! The memory model is key here...', time: '1d ago', type: 'reply', likes: 12 },
-  { id: 'a4', community: 'TypeScript Masters', content: 'Asked: "Best practices for discriminated unions in large-scale apps?"', time: '2d ago', type: 'question', likes: 89 },
-];
-
-const MOCK_ACHIEVEMENTS = [
-  { id: 'ach1', icon: '🏆', name: 'First Blood', description: 'Make your first post', rarity: 'common', rarityColor: 'text-slate-400', earned: 'Mar 2022', locked: false, progress: 100 },
-  { id: 'ach2', icon: '🔥', name: 'On Fire', description: 'Post 7 days in a row', rarity: 'uncommon', rarityColor: 'text-green-400', earned: 'Jun 2022', locked: false, progress: 100 },
-  { id: 'ach3', icon: '💎', name: 'Diamond Contributor', description: 'Reach 1000 total likes', rarity: 'rare', rarityColor: 'text-blue-400', earned: 'Sep 2022', locked: false, progress: 100 },
-  { id: 'ach4', icon: '⚡', name: 'Speed Demon', description: 'First to answer 50 questions', rarity: 'epic', rarityColor: 'text-violet-400', earned: 'Jan 2023', locked: false, progress: 100 },
-  { id: 'ach5', icon: '👑', name: 'Community Legend', description: 'Be recognized as a top voice', rarity: 'legendary', rarityColor: 'text-yellow-400', earned: 'May 2023', locked: false, progress: 100 },
-  { id: 'ach6', icon: '🌟', name: 'Star Gazer', description: 'Receive 50 stars on your posts', rarity: 'rare', rarityColor: 'text-blue-400', earned: null, locked: false, progress: 74 },
-  { id: 'ach7', icon: '🎯', name: 'Dead Accurate', description: 'Have 20 accepted solutions', rarity: 'epic', rarityColor: 'text-violet-400', earned: null, locked: false, progress: 45 },
-  { id: 'ach8', icon: '🤝', name: 'Networker', description: 'Connect with 100 community members', rarity: 'uncommon', rarityColor: 'text-green-400', earned: null, locked: true, progress: 0 },
-  { id: 'ach9', icon: '📚', name: 'Scholar', description: 'Read 500 posts', rarity: 'common', rarityColor: 'text-slate-400', earned: null, locked: true, progress: 0 },
-  { id: 'ach10', icon: '🦋', name: 'Metamorphosis', description: 'Update your profile 5 times', rarity: 'common', rarityColor: 'text-slate-400', earned: null, locked: true, progress: 0 },
-  { id: 'ach11', icon: '🌊', name: 'Wave Maker', description: 'Start a trending discussion', rarity: 'legendary', rarityColor: 'text-yellow-400', earned: null, locked: true, progress: 0 },
-  { id: 'ach12', icon: '🎭', name: 'Voice Actor', description: 'Join 3 voice channels', rarity: 'uncommon', rarityColor: 'text-green-400', earned: null, locked: true, progress: 0 },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  online: 'bg-green-500',
-  idle: 'bg-yellow-500',
-  dnd: 'bg-red-500',
-  offline: 'bg-slate-500',
-};
-
-type Tab = 'about' | 'achievements' | 'communities';
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Badge({ badge }: { badge: typeof MOCK_USER.badges[0] }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-default ${badge.bg} ${badge.color}`}>
-        <span>{badge.icon}</span>
-        <span className="hidden sm:inline">{badge.label}</span>
-      </div>
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-xs text-white whitespace-nowrap z-50 shadow-xl">
-          {badge.label}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-1 min-w-0">
-      <div className="text-indigo-400 shrink-0">{icon}</div>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-400">{label}</p>
-        <p className="text-sm font-semibold text-white truncate">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-function ActivityItem({ item }: { item: typeof MOCK_ACTIVITY[0] }) {
-  const typeConfig = {
-    post: { icon: <MessageCircle className="w-3.5 h-3.5" />, label: 'Posted in', color: 'text-blue-400' },
-    pr: { icon: <ExternalLink className="w-3.5 h-3.5" />, label: 'PR in', color: 'text-green-400' },
-    reply: { icon: <MessageSquare className="w-3.5 h-3.5" />, label: 'Replied in', color: 'text-violet-400' },
-    question: { icon: <BookOpen className="w-3.5 h-3.5" />, label: 'Asked in', color: 'text-yellow-400' },
-  }[item.type] ?? { icon: null, label: '', color: '' };
-
-  return (
-    <div className="flex gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/[0.08] border border-white/10 transition-colors">
-      <div className={`mt-0.5 shrink-0 ${typeConfig.color}`}>{typeConfig.icon}</div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-          <span className={typeConfig.color}>{typeConfig.label}</span>
-          <span className="font-medium text-slate-300">{item.community}</span>
-          <span>·</span>
-          <span>{item.time}</span>
-        </div>
-        <p className="text-sm text-slate-200 line-clamp-2">{item.content}</p>
-        <div className="flex items-center gap-1 mt-1.5 text-xs text-slate-500">
-          <ThumbsUp className="w-3 h-3" /> {item.likes}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AchievementCard({ ach }: { ach: typeof MOCK_ACHIEVEMENTS[0] }) {
-  return (
-    <div className={`relative rounded-xl border p-4 flex flex-col gap-2 transition-all hover:scale-[1.02] ${
-      ach.locked
-        ? 'bg-slate-900/50 border-white/5 opacity-50 grayscale'
-        : 'bg-white/5 border-white/10'
-    }`}>
-      {ach.earned && (
-        <div className="absolute top-2 right-2">
-          <CheckCircle className="w-4 h-4 text-green-400" />
-        </div>
-      )}
-      {ach.locked && (
-        <div className="absolute top-2 right-2">
-          <Lock className="w-4 h-4 text-slate-600" />
-        </div>
-      )}
-      <div className="text-3xl">{ach.icon}</div>
-      <div>
-        <p className="text-sm font-semibold text-white">{ach.name}</p>
-        <p className={`text-xs font-medium capitalize mt-0.5 ${ach.rarityColor}`}>{ach.rarity}</p>
-      </div>
-      <p className="text-xs text-slate-400 flex-1">{ach.description}</p>
-      {ach.earned && (
-        <p className="text-xs text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {ach.earned}</p>
-      )}
-      {!ach.earned && !ach.locked && (
-        <div>
-          <div className="flex justify-between text-xs text-slate-400 mb-1">
-            <span>Progress</span><span>{ach.progress}%</span>
-          </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" style={{ width: `${ach.progress}%` }} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  online: { label: 'Online', color: 'bg-green-500' },
+  idle: { label: 'Idle / Away', color: 'bg-amber-500' },
+  dnd: { label: 'Do Not Disturb', color: 'bg-red-500' },
+  offline: { label: 'Offline', color: 'bg-gray-500' },
+} as const;
 
 export default function UserProfilePage() {
-  const [activeTab, setActiveTab] = useState<Tab>('about');
-  const [bioExpanded, setBioExpanded] = useState(false);
-  const [following, setFollowing] = useState(false);
-  const user = MOCK_USER;
+  const router = useRouter();
+  const params = useParams<{ userId: string }>();
+  const userId = params.userId;
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'about', label: 'About', icon: <Eye className="w-4 h-4" /> },
-    { id: 'achievements', label: 'Achievements', icon: <Award className="w-4 h-4" /> },
-    { id: 'communities', label: 'Communities', icon: <Users className="w-4 h-4" /> },
-  ];
+  const { user: currentUser, updateUser } = useAuthStore();
+  const { communities } = useCommunityStore();
 
-  const xpPercent = Math.round((user.reputation.xp / user.reputation.nextLevelXp) * 100);
+  const isOwn = !userId || userId === 'me' || userId === currentUser?.id;
+
+  const [profileUser, setProfileUser] = useState<User | null>(isOwn ? currentUser : null);
+  const [isLoading, setIsLoading] = useState(!isOwn);
+  const [activeTab, setActiveTab] = useState<'about' | 'communities'>('about');
+
+  // Edit Profile Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editStatus, setEditStatus] = useState<'online' | 'idle' | 'dnd'>('online');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // If viewing own profile, keep in sync with currentUser
+  useEffect(() => {
+    if (isOwn && currentUser) {
+      setProfileUser(currentUser);
+      setIsLoading(false);
+    }
+  }, [isOwn, currentUser]);
+
+  // If viewing someone else, fetch from Firestore
+  useEffect(() => {
+    if (isOwn) return;
+    if (!userId) return;
+
+    async function fetchOtherUser() {
+      setIsLoading(true);
+      try {
+        if (db) {
+          const docRef = doc(db, 'users', userId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data() as User;
+            setProfileUser({
+              ...data,
+              id: snap.id,
+              displayName: data.displayName || data.username || 'User',
+              username: data.username || 'user',
+              avatar: data.avatar || '',
+              status: data.status || 'online',
+              bio: data.bio || 'Hey there! I am using Nexus.',
+              createdAt: data.createdAt || new Date().toISOString(),
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching profile user:', err);
+      }
+
+      setProfileUser({
+        id: userId,
+        displayName: 'Community Member',
+        username: 'user',
+        avatar: '',
+        status: 'online',
+        email: '',
+        createdAt: new Date().toISOString(),
+      });
+      setIsLoading(false);
+    }
+
+    fetchOtherUser();
+  }, [userId, isOwn]);
+
+  // Open Edit Modal
+  const openEditModal = () => {
+    if (!currentUser) return;
+    setEditName(currentUser.displayName || currentUser.username || '');
+    setEditBio(currentUser.bio || '');
+    setEditStatus((currentUser.status as any) || 'online');
+    setEditAvatar(currentUser.avatar || '');
+    setShowEditModal(true);
+  };
+
+  // Save Profile Changes
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setIsSaving(true);
+    try {
+      await updateUser({
+        displayName: editName.trim() || currentUser.displayName,
+        bio: editBio.trim(),
+        status: editStatus,
+        avatar: editAvatar.trim() || currentUser.avatar,
+      });
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const user = isOwn ? (currentUser || profileUser) : profileUser;
+  const displayName = user?.displayName || user?.username || 'User';
+  const username = user?.username || 'user';
+  const avatar = user?.avatar;
+  const status = (user?.status as keyof typeof STATUS_CONFIG) || 'online';
+  const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.online;
+  const bio = user?.bio || 'Hey there! I am using Nexus.';
+  const memberSince = user?.createdAt ? formatDate(user.createdAt) : 'Recently';
+
+  const userCommunities = communities;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[hsl(var(--bg-base))]">
+        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="h-full overflow-y-auto bg-[hsl(var(--bg-base))] text-white scrollbar-thin scrollbar-thumb-white/10">
       {/* Banner */}
-      <div className={`relative h-48 md:h-56 bg-gradient-to-r ${user.bannerColor} overflow-hidden`}>
-        <div className="absolute inset-0 opacity-10"
-          style={{backgroundImage: 'radial-gradient(circle at 20% 50%, #6366f1 0%, transparent 50%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 40%)'}} />
-        {user.isOwn && (
-          <button className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-sm border border-white/20 rounded-lg text-sm text-white hover:bg-black/60 transition-colors">
-            <Edit3 className="w-3.5 h-3.5" /> Edit Banner
+      <div className="relative h-48 md:h-56 bg-gradient-to-r from-violet-900 via-indigo-900 to-brand-900 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 20% 50%, #6366f1 0%, transparent 60%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 50%)',
+          }}
+        />
+
+        {isOwn && (
+          <button
+            onClick={openEditModal}
+            className="absolute top-4 right-4 flex items-center gap-2 px-3.5 py-1.5 bg-black/40 backdrop-blur-md border border-white/20 rounded-xl text-xs font-semibold text-white hover:bg-black/60 transition-all shadow-md"
+          >
+            <Edit3 size={14} /> Edit Profile
           </button>
         )}
       </div>
 
-      {/* Profile Info */}
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Avatar row */}
-        <div className="flex items-end justify-between -mt-10 mb-4 relative z-10">
+      {/* Profile Body */}
+      <div className="max-w-4xl mx-auto px-4 md:px-8">
+        {/* Avatar + Main Details Row */}
+        <div className="flex items-end justify-between -mt-14 mb-4 relative z-10">
           <div className="relative">
-            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${user.avatarColor} flex items-center justify-center text-2xl font-bold text-white ring-4 ring-slate-950 shadow-xl`}>
-              {user.avatarInitials}
-            </div>
-            <div className={`absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full ${STATUS_COLORS[user.status]} ring-2 ring-slate-950`} />
+            {avatar ? (
+              <img
+                src={avatar}
+                alt={displayName}
+                className="w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover ring-4 ring-[hsl(var(--bg-base))] shadow-2xl bg-[hsl(var(--bg-raised))]"
+              />
+            ) : (
+              <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-3xl font-bold text-white ring-4 ring-[hsl(var(--bg-base))] shadow-2xl">
+                {getInitials(displayName)}
+              </div>
+            )}
+            <span
+              className={cn(
+                'absolute bottom-1 right-1 w-4 h-4 rounded-full ring-4 ring-[hsl(var(--bg-base))]',
+                statusConfig.color
+              )}
+              title={statusConfig.label}
+            />
           </div>
+
+          {/* Action buttons */}
           <div className="flex items-center gap-2 pb-1">
-            {user.isOwn ? (
-              <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-sm font-medium transition-colors">
-                <Edit3 className="w-4 h-4" /> Edit Profile
+            {isOwn ? (
+              <button
+                onClick={openEditModal}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all hover:scale-105"
+              >
+                <Edit3 size={15} /> Edit Profile
               </button>
             ) : (
-              <>
-                <button className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-xl text-sm font-medium border border-white/10 transition-colors">
-                  <MessageSquare className="w-4 h-4" /> Message
-                </button>
-                <button
-                  onClick={() => setFollowing(f => !f)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                    following
-                      ? 'bg-white/10 border-white/10 hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400'
-                      : 'bg-indigo-600 hover:bg-indigo-700 border-transparent text-white'
-                  }`}
-                >
-                  {following ? <><CheckCircle className="w-4 h-4" /> Following</> : <><UserPlus className="w-4 h-4" /> Follow</>}
-                </button>
-                <button className="p-2 bg-white/10 hover:bg-white/15 rounded-xl border border-white/10 transition-colors">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-              </>
+              <button
+                onClick={() => {
+                  if (!currentUser?.id || !user?.id) return;
+                  const convId = getConversationId(currentUser.id, user.id);
+                  router.push(`/messages/${convId}`);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all hover:scale-105"
+              >
+                <MessageSquare size={15} /> Send Direct Message
+              </button>
             )}
           </div>
         </div>
 
-        {/* Name + badges */}
-        <div className="mb-4">
+        {/* Name, Username, Badges */}
+        <div className="mb-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-white">{user.displayName}</h1>
-            <span className="text-sm text-slate-400 font-medium">@{user.username}</span>
-            {user.pronouns && <span className="text-xs px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-slate-400">{user.pronouns}</span>}
+            <h1 className="text-2xl md:text-3xl font-bold text-white">{displayName}</h1>
+            <span className="text-sm text-slate-400 font-medium">@{username}</span>
+            {user?.email && isOwn && (
+              <span className="text-xs text-slate-500 flex items-center gap-1">
+                <Mail size={12} /> {user.email}
+              </span>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {user.badges.map(b => <Badge key={b.id} badge={b} />)}
+
+          {/* Role & Verification Badges */}
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-300 text-xs font-semibold">
+              <Crown size={13} className="text-amber-400" />
+              <span>Community Admin</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-400/30 bg-indigo-400/10 text-indigo-300 text-xs font-semibold">
+              <Shield size={13} className="text-indigo-400" />
+              <span>Verified Member</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-violet-400/30 bg-violet-400/10 text-violet-300 text-xs font-semibold">
+              <Sparkles size={13} className="text-violet-400" />
+              <span>Founding Member</span>
+            </span>
           </div>
         </div>
 
         {/* Bio */}
-        <div className="mb-4">
-          <p className={`text-sm text-slate-300 leading-relaxed whitespace-pre-line ${!bioExpanded ? 'line-clamp-2' : ''}`}>
-            {user.bio}
-          </p>
-          <button onClick={() => setBioExpanded(e => !e)} className="text-xs text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1 transition-colors">
-            {bioExpanded ? <><ChevronUp className="w-3.5 h-3.5" /> Show less</> : <><ChevronDown className="w-3.5 h-3.5" /> Show more</>}
-          </button>
-        </div>
-
-        {/* Social Links */}
-        <div className="flex items-center gap-4 flex-wrap mb-6">
-          {user.social.twitter && (
-            <a href={`https://twitter.com/${user.social.twitter}`} target="_blank" rel="noreferrer"
-               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-400 transition-colors">
-              <Twitter className="w-4 h-4" /> @{user.social.twitter}
-            </a>
-          )}
-          {user.social.github && (
-            <a href={`https://github.com/${user.social.github}`} target="_blank" rel="noreferrer"
-               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-              <Github className="w-4 h-4" /> {user.social.github}
-            </a>
-          )}
-          {user.social.website && (
-            <a href={user.social.website} target="_blank" rel="noreferrer"
-               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-green-400 transition-colors">
-              <Globe className="w-4 h-4" /> Website
-            </a>
-          )}
-          {user.social.youtube && (
-            <a href={`https://youtube.com/@${user.social.youtube}`} target="_blank" rel="noreferrer"
-               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-400 transition-colors">
-              <Youtube className="w-4 h-4" /> YouTube
-            </a>
-          )}
+        <div className="p-4 rounded-2xl bg-[hsl(var(--bg-raised))] border border-white/5 mb-6">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">About</h3>
+          <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{bio}</p>
         </div>
 
         {/* Stats Row */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <StatCard icon={<Calendar className="w-5 h-5" />} label="Member Since" value={user.memberSince} />
-          <StatCard icon={<Users className="w-5 h-5" />} label="Communities" value={`${user.communitiesCount} joined`} />
-          <StatCard icon={<TrendingUp className="w-5 h-5" />} label="Reputation" value={`${user.reputation.level} · ${user.reputation.xp.toLocaleString()} XP`} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-[hsl(var(--bg-raised))] border border-white/5">
+            <div className="p-2.5 rounded-lg bg-indigo-500/15 text-indigo-400">
+              <Calendar size={18} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400">Member Since</p>
+              <p className="text-sm font-semibold text-white">{memberSince}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-[hsl(var(--bg-raised))] border border-white/5">
+            <div className="p-2.5 rounded-lg bg-brand-500/15 text-brand-400">
+              <Users size={18} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400">Communities</p>
+              <p className="text-sm font-semibold text-white">{userCommunities.length} Active</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-[hsl(var(--bg-raised))] border border-white/5">
+            <div className="p-2.5 rounded-lg bg-green-500/15 text-green-400">
+              <span className={cn('block w-2.5 h-2.5 rounded-full', statusConfig.color)} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400">Status</p>
+              <p className="text-sm font-semibold text-white">{statusConfig.label}</p>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
         <div className="flex border-b border-white/10 mb-6">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
+          <button
+            onClick={() => setActiveTab('about')}
+            className={cn(
+              'px-5 py-3 text-xs font-semibold border-b-2 transition-colors',
+              activeTab === 'about'
+                ? 'border-brand-500 text-brand-400'
+                : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('communities')}
+            className={cn(
+              'px-5 py-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5',
+              activeTab === 'communities'
+                ? 'border-brand-500 text-brand-400'
+                : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            <span>Communities</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px]">
+              {userCommunities.length}
+            </span>
+          </button>
         </div>
 
         {/* Tab Content */}
-        <div className="pb-12">
-          {activeTab === 'about' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-2 space-y-6">
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">About Me</h3>
-                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{user.bio}</p>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">Recent Activity</h3>
-                  <div className="space-y-3">
-                    {MOCK_ACTIVITY.map(item => <ActivityItem key={item.id} item={item} />)}
+        <div className="pb-16">
+          {activeTab === 'about' ? (
+            <div className="space-y-4">
+              <div className="p-5 rounded-2xl bg-[hsl(var(--bg-raised))] border border-white/5">
+                <h3 className="text-sm font-bold text-white mb-3">Account Details</h3>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between py-1.5 border-b border-white/5">
+                    <span className="text-slate-400">Display Name</span>
+                    <span className="text-slate-200 font-medium">{displayName}</span>
                   </div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">Active Communities</h3>
-                  <div className="space-y-2">
-                    {MOCK_COMMUNITIES.map(c => (
-                      <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${c.color} flex items-center justify-center text-sm shrink-0`}>{c.icon}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-white truncate">{c.name}</p>
-                          <p className="text-xs text-slate-500">{c.members.toLocaleString()} members</p>
-                        </div>
-                        <span className="text-xs px-1.5 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-md">{c.role}</span>
-                      </div>
-                    ))}
+                  <div className="flex justify-between py-1.5 border-b border-white/5">
+                    <span className="text-slate-400">Username</span>
+                    <span className="text-slate-200 font-medium">@{username}</span>
                   </div>
-                </div>
-                <div className="bg-gradient-to-br from-violet-900/60 to-indigo-900/60 border border-violet-500/30 rounded-2xl p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
-                        <Crown className="w-4 h-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400">Level</p>
-                        <p className="text-sm font-bold text-white">{user.reputation.levelNum}</p>
-                      </div>
+                  {user?.email && (
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Email</span>
+                      <span className="text-slate-200 font-medium">{user.email}</span>
                     </div>
-                    <span className="text-sm font-bold text-yellow-400">{user.reputation.level}</span>
+                  )}
+                  <div className="flex justify-between py-1.5 border-b border-white/5">
+                    <span className="text-slate-400">User ID</span>
+                    <span className="font-mono text-slate-400 text-[11px]">{user?.id}</span>
                   </div>
-                  <div className="mb-2 flex justify-between text-xs text-slate-400">
-                    <span>{user.reputation.xp.toLocaleString()} XP</span>
-                    <span>{user.reputation.nextLevelXp.toLocaleString()} XP</span>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-slate-400">Role</span>
+                    <span className="text-amber-400 font-semibold">Community Administrator</span>
                   </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-violet-500 to-yellow-400 rounded-full" style={{ width: `${xpPercent}%` }} />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-2">{user.reputation.nextLevelXp - user.reputation.xp} XP to Level {user.reputation.levelNum + 1}</p>
                 </div>
               </div>
             </div>
-          )}
-
-          {activeTab === 'achievements' && (
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-violet-900/60 via-indigo-900/60 to-slate-900/60 border border-violet-500/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-6">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-xl shadow-yellow-500/20">
-                  <Crown className="w-10 h-10 text-white" />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {userCommunities.length === 0 ? (
+                <div className="col-span-2 py-12 text-center text-xs text-slate-500">
+                  No communities joined yet.
                 </div>
-                <div className="flex-1 w-full">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-xs text-slate-400 uppercase tracking-wider">Current Level</p>
-                      <p className="text-3xl font-black text-white">Level {user.reputation.levelNum}</p>
-                      <p className="text-sm text-yellow-400 font-semibold">{user.reputation.level}</p>
+              ) : (
+                userCommunities.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => router.push(`/c/${c.id}`)}
+                    className="flex items-center justify-between p-4 rounded-2xl bg-[hsl(var(--bg-raised))] border border-white/5 hover:border-brand-500/30 hover:bg-white/5 transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
+                        style={{ backgroundColor: c.accentColor || '#6366f1' }}
+                      >
+                        {c.icon && c.icon.startsWith('http') ? (
+                          <img src={c.icon} alt="" className="w-full h-full object-cover rounded-xl" />
+                        ) : (
+                          <span>{c.icon || '🚀'}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-xs text-white truncate group-hover:text-brand-400 transition-colors">
+                          {c.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">{c.description || 'Nexus community'}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-400">Next Level</p>
-                      <p className="text-lg font-bold text-slate-200">Level {user.reputation.levelNum + 1}</p>
-                    </div>
+                    <ArrowRight size={14} className="text-slate-500 group-hover:text-brand-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
                   </div>
-                  <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-violet-500 via-indigo-400 to-yellow-400 rounded-full" style={{ width: `${xpPercent}%` }} />
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-400 mt-1.5">
-                    <span>{user.reputation.xp.toLocaleString()} / {user.reputation.nextLevelXp.toLocaleString()} XP</span>
-                    <span>{xpPercent}%</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-300">All Achievements</h3>
-                  <span className="text-xs text-slate-500">{MOCK_ACHIEVEMENTS.filter(a => a.earned).length} / {MOCK_ACHIEVEMENTS.length} earned</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {MOCK_ACHIEVEMENTS.map(ach => <AchievementCard key={ach.id} ach={ach} />)}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'communities' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {MOCK_COMMUNITIES.map(c => (
-                <div key={c.id} className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl p-4 hover:bg-white/[0.08] cursor-pointer transition-colors group">
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${c.color} flex items-center justify-center text-2xl shrink-0`}>{c.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white group-hover:text-indigo-300 transition-colors">{c.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{c.members.toLocaleString()} members</p>
-                    <span className="mt-1.5 inline-block text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full">{c.role}</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" />
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[hsl(var(--bg-raised))] p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-white/8 mb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit3 size={18} className="text-brand-400" /> Edit Profile
+              </h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Your display name"
+                  className="w-full px-3 py-2 rounded-xl bg-[hsl(var(--bg-sunken))] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Bio / Status Message
+                </label>
+                <textarea
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  placeholder="Tell your community a little about yourself..."
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl bg-[hsl(var(--bg-sunken))] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Avatar Image URL
+                </label>
+                <input
+                  type="url"
+                  value={editAvatar}
+                  onChange={(e) => setEditAvatar(e.target.value)}
+                  placeholder="https://example.com/avatar.jpg"
+                  className="w-full px-3 py-2 rounded-xl bg-[hsl(var(--bg-sunken))] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Paste any direct image link to update your avatar photo.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Status
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'online', label: 'Online', color: 'bg-green-500' },
+                    { id: 'idle', label: 'Idle', color: 'bg-amber-500' },
+                    { id: 'dnd', label: 'Do Not Disturb', color: 'bg-red-500' },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setEditStatus(s.id as any)}
+                      className={cn(
+                        'flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-medium transition-all',
+                        editStatus === s.id
+                          ? 'border-brand-500 bg-brand-500/15 text-white'
+                          : 'border-white/10 bg-white/5 text-slate-400 hover:text-white'
+                      )}
+                    >
+                      <span className={cn('w-2 h-2 rounded-full', s.color)} />
+                      <span>{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/8 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition-all hover:scale-105 disabled:opacity-50"
+                >
+                  <Check size={14} /> {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
