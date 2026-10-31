@@ -17,7 +17,9 @@ import {
   Tooltip as RechartTooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
 import { MOCK_COMMUNITIES, MOCK_USERS, MOCK_ANALYTICS, CURRENT_USER } from '@/lib/mock-data';
-import { useCommunityStore } from '@/stores/community-store';
+import { useCommunityStore, canDeleteCommunity } from '@/stores/community-store';
+import { useUiStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AdminSection =
@@ -496,6 +498,9 @@ function SettingsSection({ community }: { community: any }) {
   const [name, setName] = useState(community?.name ?? '');
   const [desc, setDesc] = useState(community?.description ?? '');
   const [isPublic, setIsPublic] = useState(community?.isPublic ?? true);
+  const { openDeleteCommunityModal } = useUiStore();
+  const { user: currentUser } = useAuthStore();
+  const hasPower = canDeleteCommunity(community, currentUser);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -542,7 +547,9 @@ function SettingsSection({ community }: { community: any }) {
 
       {/* Danger zone */}
       <div className="rounded-xl bg-red-500/5 border border-red-500/20 p-5">
-        <h3 className="text-sm font-semibold text-red-400 mb-3">Danger Zone</h3>
+        <h3 className="text-sm font-semibold text-red-400 mb-3 flex items-center gap-2">
+          <AlertTriangle size={16} /> Danger Zone
+        </h3>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -556,11 +563,25 @@ function SettingsSection({ community }: { community: any }) {
           <div className="border-t border-red-500/10" />
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-white">Delete Community</div>
-              <div className="text-xs text-slate-500">Permanently delete this community and all its data</div>
+              <div className="text-sm text-white flex items-center gap-2">
+                <span>Delete Community</span>
+                {hasPower && (
+                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                    Admin Power
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-slate-500">
+                {hasPower
+                  ? 'Permanently delete this community, all channels, and messages'
+                  : 'Only the Community Owner or Admin has permission to delete this community'}
+              </div>
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors">
-              <Trash2 size={13} /> Delete
+            <button
+              onClick={() => openDeleteCommunityModal(community)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-600 border border-red-500/30 text-red-400 hover:text-white text-sm font-medium transition-all shadow-sm"
+            >
+              <Trash2 size={13} /> Delete Community
             </button>
           </div>
         </div>

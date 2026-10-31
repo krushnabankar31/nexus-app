@@ -1,8 +1,42 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Community, Channel, ChannelCategory, CommunityMember, User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+
+export function canDeleteCommunity(
+  community: Community | null | undefined,
+  currentUser: User | null | undefined
+): boolean {
+  if (!community) return false;
+  if (!currentUser) return false;
+
+  // 1. Direct owner match
+  if (community.ownerId && (community.ownerId === currentUser.id || community.ownerId === (currentUser as any).uid)) {
+    return true;
+  }
+
+  // 2. Communities created without specific UID or with default placeholder
+  if (!community.ownerId || community.ownerId === 'usr-current' || community.ownerId === 'u_current') {
+    return true;
+  }
+
+  // 3. Superadmin / Primary user Krushna Bankar
+  if (currentUser.email === 'krushnabankar31@gmail.com') {
+    return true;
+  }
+
+  // 4. Role-based check
+  if (
+    (currentUser as any).role === 'admin' ||
+    (currentUser as any).role === 'owner' ||
+    (currentUser as any).roles?.includes('administrator')
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 interface CommunityState {
   communities: Community[];
@@ -21,6 +55,7 @@ interface CommunityState {
   leaveCommunity: (communityId: string) => void;
   updateChannel: (channelId: string, updates: Partial<Channel>) => void;
   addCommunity: (community: Community) => Promise<void>;
+  deleteCommunity: (communityId: string) => Promise<void>;
 }
 
 export function getDefaultCategories(communityId: string): ChannelCategory[] {
@@ -239,6 +274,31 @@ export const useCommunityStore = create<CommunityState>()(
             });
           } catch (err) {
             console.warn('Failed to sync community to Firestore:', err);
+          }
+        }
+      },
+
+      deleteCommunity: async (communityId: string) => {
+        set((state) => {
+          const remaining = state.communities.filter((c) => c.id !== communityId);
+          const remainingJoined = state.joinedCommunityIds.filter((id) => id !== communityId);
+          const nextActive = remaining[0] ?? null;
+
+          return {
+            communities: remaining,
+            joinedCommunityIds: remainingJoined,
+            activeCommunity: nextActive,
+            categories: nextActive ? getDefaultCategories(nextActive.id) : [],
+            activeChannel: nextActive ? (getDefaultCategories(nextActive.id)[1]?.channels[0] ?? null) : null,
+          };
+        });
+
+        if (isFirebaseConfigured() && db) {
+          try {
+            await deleteDoc(doc(db, 'communities', communityId));
+          } catch (err) {
+            console.warn('Failed to delete community from Firestore:', err);
+            throw err;
           }
         }
       },

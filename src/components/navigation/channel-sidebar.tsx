@@ -7,13 +7,13 @@ import {
   ChevronDown, ChevronRight,
   Hash, Megaphone, Volume2, Video, BookMarked,
   Lock, Settings, Mic, MicOff, Headphones, VolumeX,
-  Plus, Users, Search,
+  Plus, Users, Search, Trash2, Link as LinkIcon, LogOut, ShieldCheck,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCommunityStore, getDefaultCategories } from '@/stores/community-store';
+import { useCommunityStore, getDefaultCategories, canDeleteCommunity } from '@/stores/community-store';
 import { useDMStore } from '@/stores/dm-store';
-import { getInitials } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -221,10 +221,18 @@ export function ChannelSidebar() {
   const communityId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
   const channelId = pathname.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
 
-  const { communities, categories, activeCommunity } = useCommunityStore();
+  const { communities, categories, activeCommunity, leaveCommunity } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
   const { conversations, initConversationsListener } = useDMStore();
+  const { openDeleteCommunityModal } = useUiStore();
   const [dmSearch, setDmSearch] = useState('');
+  const [showCommunityMenu, setShowCommunityMenu] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
+
+  // Close dropdown on route change
+  useEffect(() => {
+    setShowCommunityMenu(false);
+  }, [pathname]);
 
   // Listen to DM conversations
   useEffect(() => {
@@ -241,8 +249,10 @@ export function ChannelSidebar() {
       ? {
           id: communityId,
           name: communityId.replace(/^com_/, '').replace(/[_-]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+          ownerId: 'usr-current',
         }
       : null);
+  const hasDeletePower = canDeleteCommunity(community as any, currentUser);
   const isDMs = pathname.startsWith('/messages');
 
   // ── DM View ────────────────────────────────────────────────────────────────
@@ -349,16 +359,108 @@ export function ChannelSidebar() {
   return (
     <nav className="flex flex-col h-full bg-[hsl(var(--bg-raised))] border-r border-white/5" aria-label={community ? `${community.name} channels` : 'Channels'}>
       {/* Community header */}
-      <div className="flex-shrink-0 border-b border-white/5">
+      <div className="flex-shrink-0 border-b border-white/5 relative">
         <button
-          onClick={() => communityId && router.push(`/c/${communityId}`)}
-          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors group"
+          onClick={() => setShowCommunityMenu((prev) => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors group text-left"
         >
-          <span className="font-bold text-white text-sm truncate">
-            {community?.name ?? 'Select a Community'}
-          </span>
-          <ChevronDown size={16} className="text-slate-400 group-hover:text-white transition-colors flex-shrink-0" />
+          <div className="flex items-center gap-2 min-w-0 pr-1">
+            <span className="font-bold text-white text-sm truncate">
+              {community?.name ?? 'Select a Community'}
+            </span>
+            {hasDeletePower && (
+              <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-400/15 text-amber-300 border border-amber-400/25 px-1.5 py-0.5 rounded-full shrink-0">
+                Admin
+              </span>
+            )}
+          </div>
+          <ChevronDown
+            size={16}
+            className={cn(
+              'text-slate-400 group-hover:text-white transition-transform duration-200 flex-shrink-0',
+              showCommunityMenu && 'rotate-180 text-white'
+            )}
+          />
         </button>
+
+        {/* Dropdown Menu */}
+        <AnimatePresence>
+          {showCommunityMenu && community && (
+            <>
+              {/* Invisible overlay to close on outside click */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowCommunityMenu(false)}
+              />
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                transition={{ duration: 0.12 }}
+                className="absolute top-full left-2 right-2 mt-1 z-50 rounded-xl bg-[#18191c] border border-white/10 p-1.5 shadow-2xl backdrop-blur-lg"
+              >
+                {/* Community Settings */}
+                <button
+                  onClick={() => {
+                    setShowCommunityMenu(false);
+                    router.push(`/c/${community.id}/admin`);
+                  }}
+                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-200 hover:bg-brand-500 hover:text-white transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings size={14} /> Community Settings
+                  </span>
+                </button>
+
+                {/* Invite Link */}
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      navigator.clipboard.writeText(`${window.location.origin}/c/${community.id}`);
+                      setCopiedInvite(true);
+                      setTimeout(() => setCopiedInvite(false), 2000);
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <LinkIcon size={14} /> {copiedInvite ? 'Link Copied!' : 'Copy Invite Link'}
+                  </span>
+                </button>
+
+                <div className="my-1 border-t border-white/8" />
+
+                {/* Delete Community (Owner / Admin Power) */}
+                {hasDeletePower ? (
+                  <button
+                    onClick={() => {
+                      setShowCommunityMenu(false);
+                      openDeleteCommunityModal(community as any);
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-600 hover:text-white transition-colors group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Trash2 size={14} /> Delete Community
+                    </span>
+                    <span className="text-[10px] opacity-75 font-normal">Admin Power</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowCommunityMenu(false);
+                      leaveCommunity(community.id);
+                      router.push('/discover');
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut size={14} /> Leave Community
+                  </button>
+                )}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Search */}
@@ -400,13 +502,20 @@ export function ChannelSidebar() {
 
         {/* Admin link */}
         {communityId && (
-          <div className="mt-2 mb-1">
+          <div className="mt-2 mb-1 px-1">
             <button
               onClick={() => router.push(`/c/${communityId}/admin`)}
-              className="group flex w-full items-center gap-1.5 px-2 py-1.5 rounded-md text-sm text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
+              className="group flex w-full items-center justify-between px-2 py-1.5 rounded-md text-xs text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
             >
-              <Settings size={14} />
-              <span>Community Settings</span>
+              <span className="flex items-center gap-1.5">
+                <Settings size={14} />
+                <span>Community Settings</span>
+              </span>
+              {hasDeletePower && (
+                <span className="text-[10px] text-amber-400/80 font-medium px-1.5 py-0.5 rounded bg-amber-400/10">
+                  Admin
+                </span>
+              )}
             </button>
           </div>
         )}

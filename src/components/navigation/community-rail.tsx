@@ -6,12 +6,13 @@ import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Compass, Plus, Settings, LogOut,
-  UserCircle, Bell, BellOff, Moon, Shield,
+  UserCircle, Bell, BellOff, Moon, Shield, Trash2,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/auth-store';
-import { useCommunityStore } from '@/stores/community-store';
+import { useCommunityStore, canDeleteCommunity } from '@/stores/community-store';
 import { useUiStore } from '@/stores/ui-store';
+import type { Community } from '@nexus/types';
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
@@ -72,7 +73,15 @@ function Sep() {
 }
 
 // ─── CommunityButton ──────────────────────────────────────────────────────────
-function CommunityButton({ community, isActive }: { community: typeof JOINED[0]; isActive: boolean }) {
+function CommunityButton({
+  community,
+  isActive,
+  onContextMenu,
+}: {
+  community: Community;
+  isActive: boolean;
+  onContextMenu: (e: React.MouseEvent, c: Community) => void;
+}) {
   const router = useRouter();
   return (
     <Tooltip label={community.name}>
@@ -82,6 +91,7 @@ function CommunityButton({ community, isActive }: { community: typeof JOINED[0];
 
         <button
           onClick={() => router.push(`/c/${community.id}`)}
+          onContextMenu={(e) => onContextMenu(e, community)}
           aria-label={community.name}
           className={`relative flex h-12 w-12 items-center justify-center rounded-full text-base font-bold transition-all duration-150 group-hover:rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 overflow-hidden ${isActive ? 'rounded-2xl' : ''}`}
           style={{ background: isActive ? (community.accentColor ?? '#6366f1') : '#2b2d31' }}
@@ -90,18 +100,101 @@ function CommunityButton({ community, isActive }: { community: typeof JOINED[0];
             <img src={community.icon} alt={community.name} className="h-full w-full object-cover" />
           ) : (
             <span className="text-white">
-              {community.initials ?? community.name.slice(0, 2).toUpperCase()}
+              {(community as any).initials ?? community.name.slice(0, 2).toUpperCase()}
             </span>
           )}
           {/* Unread badge */}
-          {!isActive && (community.unreadCount ?? 0) > 0 && (
+          {!isActive && ((community as any).unreadCount ?? 0) > 0 && (
             <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[hsl(var(--bg-sunken))] bg-red-500 text-[9px] font-bold text-white">
-              {Math.min(community.unreadCount ?? 0, 9)}
+              {Math.min((community as any).unreadCount ?? 0, 9)}
             </span>
           )}
         </button>
       </div>
     </Tooltip>
+  );
+}
+
+// ─── Community context menu ───────────────────────────────────────────────────
+function CommunityContextMenu({
+  x,
+  y,
+  community,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  community: Community;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const { openDeleteCommunityModal } = useUiStore();
+  const { leaveCommunity } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
+  const hasPower = canDeleteCommunity(community, currentUser);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[9998]" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.1 }}
+        className="fixed z-[9999] min-w-[210px] overflow-hidden rounded-xl border border-white/10 bg-[hsl(var(--bg-overlay))] py-1.5 shadow-2xl backdrop-blur-md"
+        style={{ left: Math.min(x + 8, typeof window !== 'undefined' ? window.innerWidth - 230 : x), top: Math.min(y - 8, typeof window !== 'undefined' ? window.innerHeight - 190 : y) }}
+      >
+        <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-white/5 truncate">
+          {community.name}
+        </div>
+        <button
+          onClick={() => {
+            onClose();
+            router.push(`/c/${community.id}`);
+          }}
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/8 hover:text-white transition-colors"
+        >
+          <Compass size={14} /> Open Community
+        </button>
+        <button
+          onClick={() => {
+            onClose();
+            router.push(`/c/${community.id}/admin`);
+          }}
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/8 hover:text-white transition-colors"
+        >
+          <Settings size={14} /> Community Settings
+        </button>
+
+        <div className="my-1 mx-2 h-px bg-white/10" />
+
+        {hasPower ? (
+          <button
+            onClick={() => {
+              onClose();
+              openDeleteCommunityModal(community);
+            }}
+            className="flex w-full items-center justify-between px-3 py-2 text-xs text-red-400 hover:bg-red-500/15 transition-colors font-semibold"
+          >
+            <span className="flex items-center gap-2.5">
+              <Trash2 size={14} /> Delete Community
+            </span>
+            <span className="text-[10px] uppercase font-bold text-red-400/80">Admin</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              onClose();
+              leaveCommunity(community.id);
+              router.push('/discover');
+            }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/15 transition-colors"
+          >
+            <LogOut size={14} /> Leave Community
+          </button>
+        )}
+      </motion.div>
+    </>
   );
 }
 
@@ -152,6 +245,7 @@ export function CommunityRail() {
   const pathname = usePathname();
   const router = useRouter();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [communityContextMenu, setCommunityContextMenu] = useState<{ x: number; y: number; community: Community } | null>(null);
 
   const { communities, joinedCommunityIds } = useCommunityStore();
   const { openCreateCommunityModal } = useUiStore();
@@ -202,6 +296,10 @@ export function CommunityRail() {
           key={c.id}
           community={c}
           isActive={activeCommunityId === c.id}
+          onContextMenu={(e, comm) => {
+            e.preventDefault();
+            setCommunityContextMenu({ x: e.clientX, y: e.clientY, community: comm });
+          }}
         />
       ))}
 
@@ -269,6 +367,14 @@ export function CommunityRail() {
       <AnimatePresence>
         {contextMenu && (
           <UserContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)} />
+        )}
+        {communityContextMenu && (
+          <CommunityContextMenu
+            x={communityContextMenu.x}
+            y={communityContextMenu.y}
+            community={communityContextMenu.community}
+            onClose={() => setCommunityContextMenu(null)}
+          />
         )}
       </AnimatePresence>
     </nav>

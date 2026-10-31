@@ -1,6 +1,7 @@
 // ─── Nexus UI Store (Zustand) ─────────────────────────────────────────────────
 import { create } from "zustand";
 import { persist, subscribeWithSelector } from "zustand/middleware";
+import type { Community } from "@nexus/types";
 
 export type AppView = "community" | "dms" | "discover" | "settings";
 export type Theme = "dark" | "light";
@@ -20,9 +21,12 @@ interface UiState {
   activeThreadId: string | null;
   profilePopoverUserId: string | null;
   createCommunityModalOpen: boolean;
+  deleteCommunityTarget: Community | null;
 
   openCreateCommunityModal: () => void;
   closeCreateCommunityModal: () => void;
+  openDeleteCommunityModal: (community: Community) => void;
+  closeDeleteCommunityModal: () => void;
   setTheme: (theme: Theme) => void;
   setActiveCommunity: (id: string | null) => void;
   setActiveChannel: (id: string | null) => void;
@@ -58,9 +62,12 @@ export const useUiStore = create<UiState>()(
         activeThreadId: null,
         profilePopoverUserId: null,
         createCommunityModalOpen: false,
+        deleteCommunityTarget: null,
 
         openCreateCommunityModal: () => set({ createCommunityModalOpen: true }),
         closeCreateCommunityModal: () => set({ createCommunityModalOpen: false }),
+        openDeleteCommunityModal: (community) => set({ deleteCommunityTarget: community }),
+        closeDeleteCommunityModal: () => set({ deleteCommunityTarget: null }),
 
         toggleTheme: () =>
           set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
