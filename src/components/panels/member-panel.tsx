@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, ChevronDown, Crown, Shield, Circle, MessageSquare, X } from 'lucide-react';
-import { cn, getInitials } from '@/lib/utils';
+import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { getConversationId } from '@/stores/dm-store';
@@ -60,13 +60,17 @@ export function MemberPanel() {
     return name.toLowerCase().includes(q) || (m.user.username || '').toLowerCase().includes(q);
   });
 
-  const online = filtered.filter((m) => m.user?.status !== 'offline');
-  const offline = filtered.filter((m) => m.user?.status === 'offline');
+  const isMemberOnline = (m: (typeof displayMembers)[0]) =>
+    getUserEffectiveStatus(m.user, currentUser?.id) !== 'offline';
+
+  const online = filtered.filter(isMemberOnline);
+  const offline = filtered.filter((m) => !isMemberOnline(m));
 
   function MemberRow({ member }: { member: (typeof displayMembers)[0] }) {
     const user = member.user;
     if (!user) return null;
-    const statusCfg = STATUS_CONFIG[user.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.online;
+    const effectiveStatus = getUserEffectiveStatus(user, currentUser?.id);
+    const statusCfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.offline;
     const topRole = member.roles[0];
     const isAdmin = topRole?.name === 'Admin';
     const isMod = topRole?.name === 'Moderator';
@@ -110,7 +114,7 @@ export function MemberPanel() {
             {isAdmin && <Crown className="h-3 w-3 text-amber-400 shrink-0" />}
             {isMod && !isAdmin && <Shield className="h-3 w-3 text-blue-400 shrink-0" />}
           </div>
-          <span className="text-xs text-gray-500 capitalize">{user.status || 'online'}</span>
+          <span className="text-xs text-gray-500 capitalize">{effectiveStatus}</span>
         </div>
 
         {/* Role color indicator */}
@@ -154,10 +158,12 @@ export function MemberPanel() {
     );
   }
 
-  const adminMembers = filtered.filter((m) => m.roles[0]?.name === 'Admin');
-  const modMembers = filtered.filter((m) => m.roles[0]?.name === 'Moderator');
-  const regularMembers = filtered.filter((m) => !['Admin', 'Moderator'].includes(m.roles[0]?.name ?? ''));
-  const offlineMembers = offline.filter((m) => !['Admin', 'Moderator'].includes(m.roles[0]?.name ?? ''));
+  const adminMembers = filtered.filter((m) => m.roles[0]?.name === 'Admin' && isMemberOnline(m));
+  const modMembers = filtered.filter((m) => m.roles[0]?.name === 'Moderator' && isMemberOnline(m));
+  const regularOnlineMembers = filtered.filter(
+    (m) => !['Admin', 'Moderator'].includes(m.roles[0]?.name ?? '') && isMemberOnline(m)
+  );
+  const offlineMembers = offline;
 
   return (
     <aside className="relative flex h-full w-64 shrink-0 flex-col border-l border-white/8 bg-[hsl(var(--bg-base))]">
@@ -186,7 +192,7 @@ export function MemberPanel() {
         <GroupSection
           label="Members Online"
           color="#6b7280"
-          members={regularMembers.filter((m) => m.user?.status !== 'offline')}
+          members={regularOnlineMembers}
         />
         <GroupSection label="Offline" color="#4b5563" members={offlineMembers} />
       </div>

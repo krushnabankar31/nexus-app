@@ -11,7 +11,7 @@ import { useCommunityStore } from '@/stores/community-store';
 import { useDMStore, getConversationId } from '@/stores/dm-store';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { cn, getInitials, formatDate } from '@/lib/utils';
+import { cn, getInitials, formatDate, getUserEffectiveStatus } from '@/lib/utils';
 import type { User } from '@nexus/types';
 
 const STATUS_CONFIG = {
@@ -131,8 +131,8 @@ export default function UserProfilePage() {
   const displayName = user?.displayName || user?.username || 'User';
   const username = user?.username || 'user';
   const avatar = user?.avatar;
-  const status = (user?.status as keyof typeof STATUS_CONFIG) || 'online';
-  const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.online;
+  const status = getUserEffectiveStatus(user, currentUser?.id);
+  const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.offline;
   const bio = user?.bio || 'Hey there! I am using Nexus.';
   const memberSince = user?.createdAt ? formatDate(user.createdAt) : 'Recently';
 
@@ -450,11 +450,12 @@ export default function UserProfilePage() {
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                   Status
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: 'online', label: 'Online', color: 'bg-green-500' },
                     { id: 'idle', label: 'Idle', color: 'bg-amber-500' },
                     { id: 'dnd', label: 'Do Not Disturb', color: 'bg-red-500' },
+                    { id: 'offline', label: 'Invisible', color: 'bg-gray-500' },
                   ].map((s) => (
                     <button
                       key={s.id}

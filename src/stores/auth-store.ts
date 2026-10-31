@@ -263,6 +263,18 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        const currentUser = get().user;
+        if (isFirebaseConfigured() && db && currentUser?.id) {
+          try {
+            await updateDoc(doc(db, 'users', currentUser.id), {
+              status: 'offline',
+              lastSeen: 0,
+              updatedAt: serverTimestamp(),
+            });
+          } catch (err) {
+            console.warn('Failed to set offline status on logout:', err);
+          }
+        }
         if (isFirebaseConfigured() && auth) {
           try {
             await signOut(auth);
