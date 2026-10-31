@@ -11,6 +11,7 @@ import {
 import { cn, formatTime, formatDate, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDMStore, type DMMessage, type SendDMOptions } from '@/stores/dm-store';
+import { useCallStore } from '@/stores/call-store';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { User } from '@nexus/types';
@@ -144,17 +145,7 @@ export default function DMConversationPage() {
     };
   }, [dmId, subscribeToConversation]);
 
-  // Call timer simulation
-  useEffect(() => {
-    if (!activeCall) {
-      setCallDuration(0);
-      return;
-    }
-    const timer = setInterval(() => {
-      setCallDuration((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [activeCall]);
+
 
   // Recording timer simulation
   useEffect(() => {
@@ -335,7 +326,7 @@ export default function DMConversationPage() {
         <div className="flex items-center gap-1">
           {/* Start Voice Call */}
           <button
-            onClick={() => setActiveCall('voice')}
+            onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'voice', dmId)}
             className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
             title="Start Voice Call"
           >
@@ -344,7 +335,7 @@ export default function DMConversationPage() {
 
           {/* Start Video Call */}
           <button
-            onClick={() => setActiveCall('video')}
+            onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'video', dmId)}
             className="p-2 rounded-xl text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
             title="Start Video Call"
           >
@@ -428,7 +419,7 @@ export default function DMConversationPage() {
             </p>
             <div className="flex items-center justify-center gap-2 mt-3">
               <button
-                onClick={() => setActiveCall('voice')}
+                onClick={() => currentUser && recipient && startCall(currentUser, recipient, 'voice', dmId)}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors"
               >
                 <Phone size={12} /> Voice Call
@@ -870,102 +861,6 @@ export default function DMConversationPage() {
           </button>
         </div>
       </div>
-
-      {/* Voice / Video Call Modal */}
-      {activeCall && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-7 shadow-2xl text-center relative overflow-hidden">
-            {/* Ambient visual gradient */}
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-brand-500/20 blur-3xl pointer-events-none" />
-
-            {/* Recipient Avatar & Pulse Wave */}
-            <div className="relative mb-5 inline-block">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 p-1 shadow-2xl relative">
-                {recipient?.avatar ? (
-                  <img
-                    src={recipient.avatar}
-                    alt={recipientName}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center text-3xl font-bold text-white">
-                    {getInitials(recipientName)}
-                  </div>
-                )}
-                {/* Active audio ripple animation */}
-                <span className="animate-ping absolute inset-0 rounded-full border-2 border-emerald-400 opacity-60 pointer-events-none" />
-              </div>
-            </div>
-
-            <h3 className="text-xl font-bold text-white mb-1">{recipientName}</h3>
-            <p className="text-xs text-emerald-400 font-semibold mb-4">
-              {activeCall === 'voice' ? '📞 Voice Call Connected' : '📹 Video Call Connected'}
-            </p>
-            <p className="text-2xl font-mono text-slate-200 mb-8">{formatCallTime(callDuration)}</p>
-
-            {/* Audio Wave Bars */}
-            <div className="flex items-center justify-center gap-1.5 h-10 mb-8">
-              {[40, 70, 50, 90, 80, 45, 100, 60, 85, 40, 75, 55].map((h, i) => (
-                <span
-                  key={i}
-                  className="w-1.5 bg-brand-400 rounded-full animate-pulse"
-                  style={{
-                    height: `${h}%`,
-                    animationDelay: `${i * 0.1}s`,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Controls Suite */}
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className={cn(
-                  'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
-                  isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
-                )}
-                title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
-              >
-                {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
-              </button>
-
-              <button
-                onClick={() => setIsDeafened(!isDeafened)}
-                className={cn(
-                  'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
-                  isDeafened ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
-                )}
-                title={isDeafened ? 'Undeafen' : 'Deafen'}
-              >
-                {isDeafened ? <VolumeX size={20} /> : <Volume2 size={20} />}
-              </button>
-
-              {activeCall === 'video' && (
-                <button
-                  onClick={() => setIsCameraOff(!isCameraOff)}
-                  className={cn(
-                    'w-12 h-12 rounded-2xl flex items-center justify-center transition-all',
-                    isCameraOff ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
-                  )}
-                  title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
-                >
-                  {isCameraOff ? <VideoOff size={20} /> : <Video size={20} />}
-                </button>
-              )}
-
-              {/* End Call */}
-              <button
-                onClick={() => setActiveCall(null)}
-                className="w-14 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95 transition-all"
-                title="End Call"
-              >
-                <PhoneOff size={24} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Recipient Profile Modal */}
       {showProfileModal && recipient && (
