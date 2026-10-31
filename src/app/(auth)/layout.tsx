@@ -1,73 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Zap, Users, Shield, Star } from "lucide-react";
+import { ArrowLeft, Zap, Users, Shield, Sparkles, MessageSquare } from "lucide-react";
 
 const features = [
   {
     icon: <Zap className="w-5 h-5 text-violet-400" />,
-    title: "Real-time Everything",
-    desc: "Live reactions, instant messaging, and live streams built-in.",
+    title: "Real-Time Channels",
+    desc: "Instant messaging, threads, voice channels, and live reactions built-in.",
   },
   {
-    icon: <Users className="w-5 h-5 text-violet-400" />,
-    title: "Thriving Communities",
-    desc: "Join thousands of niche communities tailored to your passions.",
+    icon: <MessageSquare className="w-5 h-5 text-violet-400" />,
+    title: "1-on-1 Direct Messages",
+    desc: "Private direct chats between community members with live presence.",
   },
   {
     icon: <Shield className="w-5 h-5 text-violet-400" />,
-    title: "Safe & Moderated",
-    desc: "AI-powered moderation keeps conversations healthy and respectful.",
+    title: "Admin Moderation & Safety",
+    desc: "Granular roles, community permissions, and complete moderation power.",
   },
 ];
 
 const floatingCards = [
   {
     id: 1,
-    style: "top-[18%] left-[8%] rotate-[-6deg]",
+    style: "top-[16%] left-[6%] rotate-[-4deg]",
     content: (
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
-          A
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shadow-md">
+          KB
         </div>
-        <div>
-          <p className="text-xs font-semibold text-white">Alex Rivera</p>
-          <p className="text-[10px] text-slate-400">joined #gamedev 🎮</p>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-white truncate">Krushna Bankar</p>
+          <p className="text-[10px] text-emerald-400 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Online · Admin
+          </p>
         </div>
-        <Star className="w-3 h-3 text-yellow-400 ml-auto" />
       </div>
     ),
   },
   {
     id: 2,
-    style: "top-[38%] right-[6%] rotate-[5deg]",
+    style: "top-[40%] right-[4%] rotate-[4deg]",
     content: (
       <div>
-        <p className="text-[10px] text-slate-400 mb-1">Community trending</p>
-        <p className="text-xs font-semibold text-white">🚀 AI &amp; Tech</p>
-        <div className="mt-1 h-1 rounded-full bg-slate-700">
-          <div className="h-1 rounded-full bg-violet-500 w-[78%]" />
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] text-slate-400 font-medium">Active Community</span>
+          <span className="text-[10px] text-emerald-400 font-semibold">● Live</span>
         </div>
-        <p className="text-[10px] text-slate-400 mt-1">14.2k members</p>
+        <p className="text-xs font-bold text-white flex items-center gap-1">
+          <span>⚡ THORODIN</span>
+        </p>
+        <p className="text-[10px] text-slate-400 mt-1"># announcements · # general · 100% sync</p>
       </div>
     ),
   },
   {
     id: 3,
-    style: "bottom-[22%] left-[12%] rotate-[4deg]",
+    style: "bottom-[20%] left-[10%] rotate-[2deg]",
     content: (
       <div className="flex items-center gap-2">
-        <div className="flex -space-x-1">
-          {["from-blue-400 to-cyan-400", "from-pink-400 to-rose-400", "from-green-400 to-emerald-400"].map(
-            (g, i) => (
-              <div
-                key={i}
-                className={`w-5 h-5 rounded-full bg-gradient-to-br ${g} border border-slate-800`}
-              />
-            )
-          )}
-        </div>
-        <p className="text-[10px] text-white">+238 online now</p>
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
+        <p className="text-[11px] font-medium text-white">Real-Time Presence Heartbeats Active</p>
       </div>
     ),
   },
@@ -77,7 +74,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen flex bg-slate-950">
       {/* ─── Left branding panel (desktop only) ─── */}
-      <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden flex-col items-center justify-center px-14 py-12">
+      <div className="hidden lg:flex lg:w-[50%] relative overflow-hidden flex-col items-center justify-center px-14 py-12">
         {/* Gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-violet-950/40 to-slate-950" />
 
@@ -109,7 +106,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             className={`absolute ${card.style} z-10 pointer-events-none`}
           >
             <div
-              className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-3 w-48 shadow-xl"
+              className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-xl p-3 w-52 shadow-xl"
               style={{
                 animation: `float${card.id} 6s ease-in-out infinite`,
               }}
@@ -138,13 +135,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               come alive
             </span>
           </h2>
-          <p className="text-slate-400 text-lg mb-12 leading-relaxed">
-            Connect, create, and grow with millions of passionate people across
-            thousands of unique communities.
+          <p className="text-slate-400 text-base mb-10 leading-relaxed">
+            Connect, collaborate, and chat in real-time with crystal-clear voice,
+            live channels, and modern community controls.
           </p>
 
           {/* Feature list */}
-          <div className="space-y-5">
+          <div className="space-y-4">
             {features.map((f) => (
               <div key={f.title} className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
@@ -159,41 +156,43 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
 
           {/* Social proof */}
-          <div className="mt-12 flex items-center gap-4 pt-8 border-t border-slate-800">
+          <div className="mt-10 flex items-center gap-4 pt-6 border-t border-slate-800/80">
             <div className="flex -space-x-2">
               {[
-                "from-violet-500 to-purple-500",
-                "from-blue-500 to-cyan-500",
-                "from-pink-500 to-rose-500",
-                "from-green-500 to-emerald-500",
-                "from-amber-500 to-orange-500",
-              ].map((g, i) => (
+                { name: "Krushna Bankar", color: "from-amber-500 to-red-600", init: "KB" },
+                { name: "First Principles", color: "from-emerald-500 to-teal-600", init: "FP" },
+                { name: "Arnav Bagore", color: "from-blue-500 to-indigo-600", init: "AB" },
+                { name: "techtonic", color: "from-violet-500 to-purple-600", init: "TT" },
+              ].map((m, i) => (
                 <div
                   key={i}
-                  className={`w-8 h-8 rounded-full bg-gradient-to-br ${g} border-2 border-slate-950`}
-                />
+                  title={m.name}
+                  className={`w-8 h-8 rounded-full bg-gradient-to-br ${m.color} border-2 border-slate-950 flex items-center justify-center text-[10px] font-bold text-white shadow-sm`}
+                >
+                  {m.init}
+                </div>
               ))}
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">2.4M+ members</p>
-              <p className="text-xs text-slate-400">joined this month</p>
+              <p className="text-sm font-semibold text-white">Real-Time Community Platform</p>
+              <p className="text-xs text-slate-400">Live sync on Vercel &amp; Firebase</p>
             </div>
           </div>
         </div>
 
-        {/* Float keyframes injected via global style tag trick */}
+        {/* Float keyframes */}
         <style>{`
           @keyframes float1 {
-            0%, 100% { transform: translateY(0px) rotate(-6deg); }
-            50% { transform: translateY(-12px) rotate(-6deg); }
+            0%, 100% { transform: translateY(0px) rotate(-4deg); }
+            50% { transform: translateY(-10px) rotate(-4deg); }
           }
           @keyframes float2 {
-            0%, 100% { transform: translateY(0px) rotate(5deg); }
-            50% { transform: translateY(-10px) rotate(5deg); }
-          }
-          @keyframes float3 {
             0%, 100% { transform: translateY(0px) rotate(4deg); }
             50% { transform: translateY(-8px) rotate(4deg); }
+          }
+          @keyframes float3 {
+            0%, 100% { transform: translateY(0px) rotate(2deg); }
+            50% { transform: translateY(-6px) rotate(2deg); }
           }
         `}</style>
       </div>

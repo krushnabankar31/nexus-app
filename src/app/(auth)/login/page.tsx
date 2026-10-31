@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -117,6 +118,9 @@ export default function LoginPage() {
     message: string;
   } | null>(null);
 
+  const { login, loginWithGooglePopup } = useAuthStore();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -126,19 +130,35 @@ export default function LoginPage() {
     defaultValues: { rememberMe: false },
   });
 
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const user = await loginWithGooglePopup();
+      if (user) {
+        showToast("success", "Welcome back! Redirecting…");
+        router.push("/discover");
+      }
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        showToast("error", err?.message || "Google sign in failed.");
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
   };
 
   const onSubmit = async (data: LoginForm) => {
-    // Simulate network request
-    await new Promise((r) => setTimeout(r, 1500));
-    if (data.email && data.password) {
+    try {
+      await login(data.email, data.password);
       showToast("success", "Welcome back! Redirecting…");
-      setTimeout(() => router.push("/discover"), 1500);
-    } else {
-      showToast("error", "Invalid credentials. Please try again.");
+      setTimeout(() => router.push("/discover"), 800);
+    } catch (err: any) {
+      showToast("error", err?.message || "Invalid credentials. Please try again.");
     }
   };
 
@@ -155,18 +175,26 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Social logins */}
-        <div className="flex gap-3">
-          <SocialButton
-            icon={<GoogleIcon />}
-            label="Google"
-            onClick={() => router.push('/google-auth?redirect=/discover')}
-          />
-          <SocialButton
-            icon={<GitHubIcon />}
-            label="GitHub"
-            onClick={() => router.push('/google-auth?redirect=/discover')}
-          />
+        {/* Google 1-Click login */}
+        <div>
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading || isSubmitting}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 text-sm font-semibold shadow-md transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+          >
+            {isGoogleLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-neutral-800" />
+                <span>Signing in with Google...</span>
+              </div>
+            ) : (
+              <>
+                <GoogleIcon />
+                <span>Continue with Google</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Divider */}
