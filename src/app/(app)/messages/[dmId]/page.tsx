@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   MessageSquare, Send, Smile, ArrowLeft, Shield, User as UserIcon, Trash2,
 } from 'lucide-react';
-import { cn, formatTime, formatDate, getInitials } from '@/lib/utils';
+import { cn, formatTime, formatDate, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDMStore, type DMMessage } from '@/stores/dm-store';
 import { db } from '@/lib/firebase';
@@ -164,7 +164,7 @@ export default function DMConversationPage() {
             <span
               className={cn(
                 'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
-                recipient?.status === 'offline' ? 'bg-gray-500' : 'bg-green-400'
+                getUserEffectiveStatus(recipient, currentUser?.id) === 'offline' ? 'bg-gray-500' : 'bg-green-400'
               )}
             />
           </div>

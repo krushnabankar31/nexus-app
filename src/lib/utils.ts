@@ -253,3 +253,43 @@ export function getRarityColor(rarity: string): string {
   };
   return map[rarity] ?? 'text-gray-400';
 }
+
+// ---- User Presence & Status -----------------------------------------
+export type UserStatus = 'online' | 'idle' | 'dnd' | 'offline';
+
+export function getUserEffectiveStatus(
+  user: any,
+  currentUserId?: string
+): UserStatus {
+  if (!user) return 'offline';
+
+  // Current session user: respect their active status selection
+  if (currentUserId && (user.id === currentUserId || user.userId === currentUserId)) {
+    return (user.status as UserStatus) || 'online';
+  }
+
+  // If user explicitly chose offline
+  if (user.status === 'offline') return 'offline';
+
+  // Check lastSeen presence timestamp
+  if (user.lastSeen) {
+    const lastSeenTime =
+      typeof user.lastSeen === 'number'
+        ? user.lastSeen
+        : user.lastSeen?.toMillis
+        ? user.lastSeen.toMillis()
+        : user.lastSeen?.toDate
+        ? user.lastSeen.toDate().getTime()
+        : new Date(user.lastSeen).getTime();
+
+    if (!isNaN(lastSeenTime) && lastSeenTime > 0) {
+      const isRecentlyActive = Date.now() - lastSeenTime < 150000; // 2.5 minutes
+      if (isRecentlyActive) {
+        return (user.status as UserStatus) || 'online';
+      }
+    }
+  }
+
+  // No active heartbeat in the last 2.5 minutes -> Offline
+  return 'offline';
+}

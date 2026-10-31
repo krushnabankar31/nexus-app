@@ -13,7 +13,7 @@ import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore, getDefaultCategories, canDeleteCommunity } from '@/stores/community-store';
 import { useDMStore } from '@/stores/dm-store';
-import { cn, getInitials } from '@/lib/utils';
+import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ export function ChannelSidebar() {
                     <span
                       className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[hsl(var(--bg-raised))]"
                       style={{
-                        backgroundColor: details.status === 'offline' ? '#6b7280' : '#22c55e',
+                        backgroundColor: getUserEffectiveStatus(details, currentUser?.id) === 'offline' ? '#6b7280' : '#22c55e',
                       }}
                     />
                   </div>
