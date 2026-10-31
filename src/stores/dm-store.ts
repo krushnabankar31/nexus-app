@@ -45,10 +45,30 @@ export interface DMMessage {
   content: string;
   createdAt: string;
   createdAtIso?: string;
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'file' | 'audio';
+  attachmentName?: string;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+  };
+  reactions?: Record<string, string[]>; // { "❤️": ["uid1"], "🔥": ["uid2"] }
 }
 
 export function getConversationId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
+}
+
+export interface SendDMOptions {
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'file' | 'audio';
+  attachmentName?: string;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    content: string;
+  };
 }
 
 interface DMState {
@@ -60,8 +80,19 @@ interface DMState {
   fetchAllUsers: (currentUserId?: string) => Promise<User[]>;
   initConversationsListener: (currentUserId: string) => () => void;
   subscribeToConversation: (conversationId: string) => () => void;
-  sendDirectMessage: (sender: User, recipient: User, content: string) => Promise<string>;
+  sendDirectMessage: (
+    sender: User,
+    recipient: User,
+    content: string,
+    options?: SendDMOptions
+  ) => Promise<string>;
   deleteDirectMessage: (conversationId: string, msgId: string) => Promise<void>;
+  toggleReaction: (
+    conversationId: string,
+    msgId: string,
+    emoji: string,
+    userId: string
+  ) => Promise<void>;
 }
 
 export const useDMStore = create<DMState>()((set, get) => ({
@@ -100,8 +131,8 @@ export const useDMStore = create<DMState>()((set, get) => ({
     }
 
     try {
-      const convsRef = collection(db, 'conversations');
-      const q = query(convsRef, where('participants', 'array-contains', currentUserId));
+      const convsCol = collection(db, 'conversations');
+      const q = query(convsCol, where('participants', 'array-contains', currentUserId));
 
       const unsubscribe = onSnapshot(
         q,
@@ -118,7 +149,7 @@ export const useDMStore = create<DMState>()((set, get) => ({
 
             list.push({
               id: docSnap.id,
-              participants: Array.isArray(data.participants) ? data.participants : [],
+              participants: data.participants || [],
               participantDetails: data.participantDetails || {},
               lastMessage: data.lastMessage || '',
               lastSenderId: data.lastSenderId || '',
@@ -126,19 +157,21 @@ export const useDMStore = create<DMState>()((set, get) => ({
             });
           });
 
-          // Sort by last message timestamp descending
-          list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+          // Sort descending by most recent message
+          list.sort(
+            (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+          );
 
           set({ conversations: list });
         },
         (err) => {
-          console.warn('Conversations listener notice:', err);
+          console.warn('Conversations listener error:', err);
         }
       );
 
       return unsubscribe;
     } catch (err) {
-      console.warn('Error initiating conversations listener:', err);
+      console.warn('Error creating conversations listener:', err);
       return () => {};
     }
   },
@@ -149,11 +182,10 @@ export const useDMStore = create<DMState>()((set, get) => ({
     }
 
     try {
-      const msgsRef = collection(db, 'conversations', conversationId, 'messages');
-      const q = query(msgsRef);
+      const msgsCol = collection(db, 'conversations', conversationId, 'messages');
 
       const unsubscribe = onSnapshot(
-        q,
+        msgsCol,
         (snapshot) => {
           const remoteMsgs: DMMessage[] = [];
           snapshot.forEach((docSnap) => {
@@ -180,6 +212,11 @@ export const useDMStore = create<DMState>()((set, get) => ({
               content: data.content || '',
               createdAt,
               createdAtIso: data.createdAtIso || createdAt,
+              attachmentUrl: data.attachmentUrl || undefined,
+              attachmentType: data.attachmentType || undefined,
+              attachmentName: data.attachmentName || undefined,
+              replyTo: data.replyTo || undefined,
+              reactions: data.reactions || undefined,
             });
           });
 
@@ -207,10 +244,18 @@ export const useDMStore = create<DMState>()((set, get) => ({
     }
   },
 
-  sendDirectMessage: async (sender: User, recipient: User, content: string) => {
-    const text = content.trim();
-    if (!text || !sender?.id || !recipient?.id) {
-      throw new Error('Sender, recipient, and message text are required');
+  sendDirectMessage: async (
+    sender: User,
+    recipient: User,
+    content: string,
+    options?: SendDMOptions
+  ) => {
+    const text = (content || '').trim();
+    if (!text && !options?.attachmentUrl) {
+      throw new Error('Sender, recipient, and message text or attachment are required');
+    }
+    if (!sender?.id || !recipient?.id) {
+      throw new Error('Sender and recipient IDs are required');
     }
 
     const conversationId = getConversationId(sender.id, recipient.id);
@@ -230,6 +275,11 @@ export const useDMStore = create<DMState>()((set, get) => ({
       content: text,
       createdAt: nowIso,
       createdAtIso: nowIso,
+      attachmentUrl: options?.attachmentUrl,
+      attachmentType: options?.attachmentType,
+      attachmentName: options?.attachmentName,
+      replyTo: options?.replyTo,
+      reactions: {},
     };
 
     // Optimistic UI update
@@ -242,6 +292,8 @@ export const useDMStore = create<DMState>()((set, get) => ({
 
     if (isFirebaseConfigured() && db) {
       try {
+        const lastSummary = text || (options?.attachmentType === 'image' ? '📷 Photo' : options?.attachmentType === 'audio' ? '🎵 Audio note' : '📎 Attachment');
+
         // 1. Update / create conversation document
         const convRef = doc(db, 'conversations', conversationId);
         const convPayload = {
@@ -263,7 +315,7 @@ export const useDMStore = create<DMState>()((set, get) => ({
               status: recipient.status || 'online',
             },
           },
-          lastMessage: text,
+          lastMessage: lastSummary,
           lastSenderId: sender.id,
           lastMessageAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -272,7 +324,7 @@ export const useDMStore = create<DMState>()((set, get) => ({
 
         // 2. Add message to subcollection
         const msgRef = doc(db, 'conversations', conversationId, 'messages', msgId);
-        const msgPayload = {
+        const msgPayload: Record<string, any> = {
           id: msgId,
           conversationId,
           senderId: sender.id,
@@ -286,6 +338,16 @@ export const useDMStore = create<DMState>()((set, get) => ({
           createdAt: serverTimestamp(),
           createdAtIso: nowIso,
         };
+
+        if (options?.attachmentUrl) {
+          msgPayload.attachmentUrl = options.attachmentUrl;
+          msgPayload.attachmentType = options.attachmentType || 'image';
+          if (options.attachmentName) msgPayload.attachmentName = options.attachmentName;
+        }
+        if (options?.replyTo) {
+          msgPayload.replyTo = options.replyTo;
+        }
+
         await setDoc(msgRef, msgPayload);
       } catch (err) {
         console.error('Error sending direct message to Firestore:', err);
@@ -311,6 +373,57 @@ export const useDMStore = create<DMState>()((set, get) => ({
         await deleteDoc(msgDocRef);
       } catch (err) {
         console.warn('Error deleting direct message in Firestore:', err);
+      }
+    }
+  },
+
+  toggleReaction: async (
+    conversationId: string,
+    msgId: string,
+    emoji: string,
+    userId: string
+  ) => {
+    if (!conversationId || !msgId || !emoji || !userId) return;
+
+    let updatedReactions: Record<string, string[]> = {};
+
+    set((state) => {
+      const convMsgs = state.messages[conversationId] ?? [];
+      const updated = convMsgs.map((m) => {
+        if (m.id !== msgId) return m;
+        const currentReactions: Record<string, string[]> = { ...(m.reactions || {}) };
+        const users = [...(currentReactions[emoji] || [])];
+        const userIndex = users.indexOf(userId);
+
+        if (userIndex >= 0) {
+          users.splice(userIndex, 1);
+          if (users.length === 0) {
+            delete currentReactions[emoji];
+          } else {
+            currentReactions[emoji] = users;
+          }
+        } else {
+          currentReactions[emoji] = [...users, userId];
+        }
+
+        updatedReactions = currentReactions;
+        return { ...m, reactions: currentReactions };
+      });
+
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: updated,
+        },
+      };
+    });
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        const msgRef = doc(db, 'conversations', conversationId, 'messages', msgId);
+        await setDoc(msgRef, { reactions: updatedReactions }, { merge: true });
+      } catch (err) {
+        console.warn('Error updating reaction in Firestore:', err);
       }
     }
   },
