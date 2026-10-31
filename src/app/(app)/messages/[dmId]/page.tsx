@@ -24,6 +24,68 @@ const EMOJI_CATEGORIES = {
   'Fun & Vibing': ['☕', '🍕', '🎮', '🎧', '🎸', '🌟', '🌈', '💎', '🎯', '🏆', '🍿', '🏖️'],
 };
 
+// Client-side image compression to fit within Firestore 1MB document limit
+function compressImage(file: File, maxDimension = 1200, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        let result = canvas.toDataURL('image/jpeg', quality);
+
+        // If still large (>650KB), downscale further to avoid Firestore 1MB doc limit
+        if (result.length > 650000) {
+          const smallCanvas = document.createElement('canvas');
+          smallCanvas.width = Math.round(width * 0.7);
+          smallCanvas.height = Math.round(height * 0.7);
+          const sCtx = smallCanvas.getContext('2d');
+          if (sCtx) {
+            sCtx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+            result = smallCanvas.toDataURL('image/jpeg', 0.65);
+          }
+        }
+
+        resolve(result);
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
 const STICKER_PRESETS = [
   { name: 'Let’s Go! 🚀', url: 'https://images.unsplash.com/photo-1517976487507-5b3b4b45f942?w=400&auto=format&fit=crop&q=80', label: 'Rocket Launch' },
   { name: 'Pure Fire 🔥', url: 'https://images.unsplash.com/photo-1527489377706-5bf97e608852?w=400&auto=format&fit=crop&q=80', label: 'Campfire Glow' },
@@ -59,6 +121,8 @@ export default function DMConversationPage() {
   const [selectedAttachment, setSelectedAttachment] = useState<{ url: string; type: 'image' | 'file'; name?: string } | null>(null);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -223,23 +287,59 @@ export default function DMConversationPage() {
     }
   };
 
-  // Image Upload Handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload Handler with Automatic Compression
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
+    // Clear input so user can re-select same file
+    e.target.value = '';
+    setShowAttachMenu(false);
+    setIsUploadingImage(true);
+
+    try {
+      const compressed = await compressImage(file);
+      if (compressed) {
         setSelectedAttachment({
-          url: reader.result,
+          url: compressed,
           type: file.type.startsWith('image/') ? 'image' : 'file',
           name: file.name,
         });
       }
-    };
-    reader.readAsDataURL(file);
-    setShowAttachMenu(false);
+    } catch (err) {
+      console.error('Error handling file upload:', err);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Paste Screenshot Handler
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          setIsUploadingImage(true);
+          try {
+            const compressed = await compressImage(file);
+            setSelectedAttachment({
+              url: compressed,
+              type: 'image',
+              name: 'Pasted Screenshot.jpg',
+            });
+          } catch (err) {
+            console.error('Failed to process pasted screenshot:', err);
+          } finally {
+            setIsUploadingImage(false);
+          }
+          break;
+        }
+      }
+    }
   };
 
   // Voice Note Send Simulation
@@ -686,6 +786,14 @@ export default function DMConversationPage() {
         </div>
       )}
 
+      {/* Uploading / Compressing Banner */}
+      {isUploadingImage && (
+        <div className="px-4 py-2 bg-brand-950/40 border-t border-brand-500/20 flex items-center gap-2 text-xs text-brand-300 animate-pulse">
+          <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+          <span>Processing and optimizing photo for instant delivery...</span>
+        </div>
+      )}
+
       {/* Attachment Preview Banner */}
       {selectedAttachment && (
         <div className="px-4 py-2 bg-[hsl(var(--bg-overlay))] border-t border-white/10 flex items-center justify-between animate-slide-up text-xs">
@@ -791,12 +899,22 @@ export default function DMConversationPage() {
             )}
           </div>
 
+          {/* Direct Photo Upload Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2 rounded-xl text-slate-400 hover:text-brand-400 hover:bg-brand-500/10 active:scale-95 transition-all shrink-0 cursor-pointer"
+            title="Attach Photo or Image"
+          >
+            <ImageIcon size={18} />
+          </button>
+
           {/* Textarea */}
           <textarea
             ref={composerRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={`Message @${recipientName}`}
             rows={1}
             className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none max-h-32 overflow-y-auto"
@@ -942,6 +1060,42 @@ export default function DMConversationPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+            {/* Image Lightbox Viewer Modal */}
+      {viewingImage && (
+        <div
+          onClick={() => setViewingImage(null)}
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+          >
+            <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+              <a
+                href={viewingImage}
+                download="nexus-image.jpg"
+                className="p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm transition-all cursor-pointer"
+                title="Download Photo"
+              >
+                <Paperclip size={18} />
+              </a>
+              <button
+                onClick={() => setViewingImage(null)}
+                className="p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm transition-all cursor-pointer"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <img
+              src={viewingImage}
+              alt="Full view"
+              className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10"
+            />
           </div>
         </div>
       )}
