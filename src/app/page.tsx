@@ -7,11 +7,14 @@ import {
   Zap, BarChart, DollarSign, Users, Shield, Sparkles, 
   ChevronDown, Star, ArrowRight, Github, Twitter, Linkedin, Globe, Flame
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore } from '@/stores/community-store';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -44,14 +47,32 @@ const Navbar = () => {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-4">
-          <Link href="/login" className="text-sm font-medium text-neutral-300 hover:text-white transition-colors">
-            Log in
-          </Link>
-          <Link href="/signup" className="text-sm font-medium bg-white text-black px-4 py-2 rounded-full hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-            Get Started
-          </Link>
-        </div>
+        {isAuthenticated && user ? (
+          <div className="hidden md:flex items-center gap-3">
+            <Link
+              href="/discover"
+              className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-500/25 active:scale-95"
+            >
+              {user.avatar ? (
+                <img src={user.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white">
+                  {(user.displayName || user.username || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span>Open Nexus ({user.displayName || user.username}) →</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="hidden md:flex items-center gap-4">
+            <Link href="/login" className="text-sm font-medium text-neutral-300 hover:text-white transition-colors">
+              Log in
+            </Link>
+            <Link href="/signup" className="text-sm font-medium bg-white text-black px-4 py-2 rounded-full hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+              Get Started
+            </Link>
+          </div>
+        )}
 
         {/* Mobile Toggle */}
         <button 
@@ -71,10 +92,20 @@ const Navbar = () => {
             </Link>
           ))}
           <hr className="border-white/10 my-2" />
-          <div className="flex flex-col gap-3">
-            <Link href="/login" className="text-center py-2 text-neutral-300 font-medium">Log in</Link>
-            <Link href="/signup" className="text-center py-2 bg-gradient-to-r from-indigo-600 to-violet-500 rounded-lg text-white font-medium">Get Started</Link>
-          </div>
+          {isAuthenticated && user ? (
+            <Link
+              href="/discover"
+              className="text-center py-2.5 bg-gradient-to-r from-indigo-600 to-violet-500 rounded-xl text-white font-semibold"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Open Nexus ({user.displayName || user.username}) →
+            </Link>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <Link href="/login" className="text-center py-2 text-neutral-300 font-medium">Log in</Link>
+              <Link href="/signup" className="text-center py-2 bg-gradient-to-r from-indigo-600 to-violet-500 rounded-lg text-white font-medium">Get Started</Link>
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -90,6 +121,7 @@ const Hero = ({
   memberCount: number;
   activeCommunity: any;
 }) => {
+  const { user, isAuthenticated } = useAuthStore();
   const commName = activeCommunity?.name || 'THORODIN';
   const commInitial = (activeCommunity?.name ? activeCommunity.name.slice(0, 2) : 'TH').toUpperCase();
   const commSlug = activeCommunity?.id || 'com_thorodin';
@@ -121,9 +153,19 @@ const Hero = ({
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-16 w-full sm:w-auto">
-          <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
-            Start for free <ArrowRight size={20} />
-          </Link>
+          {isAuthenticated && user ? (
+            <Link
+              href="/discover"
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg hover:from-indigo-500 hover:to-violet-500 transition-all flex items-center justify-center gap-2.5 hover:scale-105 active:scale-95 shadow-[0_0_35px_rgba(99,102,241,0.5)]"
+            >
+              <span>Open Nexus ({user.displayName || user.username})</span>
+              <ArrowRight size={20} />
+            </Link>
+          ) : (
+            <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+              Start for free <ArrowRight size={20} />
+            </Link>
+          )}
           <Link href="/discover" className="px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
             Explore communities <Play size={20} className="fill-current" />
           </Link>
@@ -669,7 +711,16 @@ const Footer = () => (
 );
 
 export default function LandingPage() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
   const { communities, members, initCommunitiesListener, initMembersListener } = useCommunityStore();
+
+  // If user is already logged in, automatically navigate directly to the app
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      router.replace('/discover');
+    }
+  }, [isAuthenticated, user?.id, router]);
 
   useEffect(() => {
     const unsubC = initCommunitiesListener();

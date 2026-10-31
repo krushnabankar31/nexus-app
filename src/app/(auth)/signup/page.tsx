@@ -69,7 +69,14 @@ function GoogleIcon() {
 
 export default function SignupPage() {
   const router = useRouter();
-  const { registerWithEmail, loginWithGooglePopup } = useAuthStore();
+  const { registerWithEmail, loginWithGooglePopup, isAuthenticated, user } = useAuthStore();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      router.replace('/discover');
+    }
+  }, [isAuthenticated, user?.id, router]);
 
   const [form, setForm] = useState<SignupForm>({
     email: '',

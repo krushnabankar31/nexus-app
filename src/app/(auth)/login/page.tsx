@@ -118,7 +118,14 @@ export default function LoginPage() {
     message: string;
   } | null>(null);
 
-  const { login, loginWithGooglePopup } = useAuthStore();
+  const { login, loginWithGooglePopup, isAuthenticated, user } = useAuthStore();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      router.replace('/discover');
+    }
+  }, [isAuthenticated, user?.id, router]);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const {

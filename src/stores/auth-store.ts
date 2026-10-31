@@ -9,6 +9,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -91,8 +93,10 @@ export const useAuthStore = create<AuthState>()(
             const token = await fbUser.getIdToken();
             set({ user: userObj, isAuthenticated: true, isLoading: false, token, error: null });
           } else {
-            // No user is logged in
-            if (isFirebaseConfigured()) {
+            // Only clear state if there is no user already saved in localStorage/Zustand
+            // This prevents race-condition logouts on page refresh or tab re-opening
+            const existingUser = get().user;
+            if (!existingUser?.id) {
               set({ user: null, isAuthenticated: false, token: null, isLoading: false });
             }
           }
@@ -105,6 +109,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         if (isFirebaseConfigured() && auth && googleProvider) {
           try {
+            await setPersistence(auth, browserLocalPersistence);
             const res = await signInWithPopup(auth, googleProvider);
             const fbUser = res.user;
             const username = (fbUser.displayName || fbUser.email?.split('@')[0] || 'user')
@@ -158,6 +163,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         if (isFirebaseConfigured() && auth && password) {
           try {
+            await setPersistence(auth, browserLocalPersistence);
             const res = await signInWithEmailAndPassword(auth, email, password);
             const fbUser = res.user;
             const token = await fbUser.getIdToken();
@@ -195,6 +201,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         if (isFirebaseConfigured() && auth) {
           try {
+            await setPersistence(auth, browserLocalPersistence);
             const res = await createUserWithEmailAndPassword(auth, email, password);
             const fbUser = res.user;
             const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -283,6 +290,11 @@ export const useAuthStore = create<AuthState>()(
           }
         }
         set({ user: null, isAuthenticated: false, token: null, error: null });
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('nexus-auth');
+          } catch (e) {}
+        }
       },
 
       updateUser: async (updates: Partial<User>) => {
