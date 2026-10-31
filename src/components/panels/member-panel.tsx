@@ -1,10 +1,13 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
-import { Search, ChevronDown, Crown, Shield, Circle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, ChevronDown, Crown, Shield, Circle, MessageSquare, X } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { getConversationId } from '@/stores/dm-store';
+import type { User } from '@nexus/types';
 
 const STATUS_CONFIG = {
   online: { color: 'bg-green-400', label: 'Online' },
@@ -14,9 +17,11 @@ const STATUS_CONFIG = {
 } as const;
 
 export function MemberPanel() {
+  const router = useRouter();
   const { members, activeCommunity } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
   const [search, setSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Use real Firestore members, with current logged-in user fallback
   const displayMembers =
@@ -66,9 +71,20 @@ export function MemberPanel() {
     const isAdmin = topRole?.name === 'Admin';
     const isMod = topRole?.name === 'Moderator';
     const displayName = user.displayName || user.username || 'User';
+    const isMe = user.id === currentUser?.id;
 
     return (
-      <button className="group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/8 transition-colors text-left">
+      <button
+        onClick={() => {
+          if (!isMe) {
+            setSelectedUser(user);
+          }
+        }}
+        className={cn(
+          'group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 transition-colors text-left',
+          isMe ? 'cursor-default' : 'hover:bg-white/8 cursor-pointer'
+        )}
+      >
         {/* Avatar */}
         <div className="relative shrink-0">
           {user.avatar ? (
@@ -90,6 +106,7 @@ export function MemberPanel() {
             <span className="truncate text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
               {displayName}
             </span>
+            {isMe && <span className="text-[10px] text-slate-500 font-normal">(you)</span>}
             {isAdmin && <Crown className="h-3 w-3 text-amber-400 shrink-0" />}
             {isMod && !isAdmin && <Shield className="h-3 w-3 text-blue-400 shrink-0" />}
           </div>
@@ -123,7 +140,7 @@ export function MemberPanel() {
         >
           <ChevronDown className={cn('h-3 w-3 text-gray-500 transition-transform', collapsed && '-rotate-90')} />
           <span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
-            {label} — {groupMembers.length}
+            {label} - {groupMembers.length}
           </span>
         </button>
         {!collapsed && (
@@ -143,11 +160,11 @@ export function MemberPanel() {
   const offlineMembers = offline.filter((m) => !['Admin', 'Moderator'].includes(m.roles[0]?.name ?? ''));
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-l border-white/8 bg-[hsl(var(--bg-base))]">
+    <aside className="relative flex h-full w-64 shrink-0 flex-col border-l border-white/8 bg-[hsl(var(--bg-base))]">
       {/* Header */}
       <div className="p-4 pb-2">
         <h3 className="mb-2 text-sm font-bold text-gray-200">
-          Members <span className="text-gray-500 font-normal">— {displayMembers.length}</span>
+          Members <span className="text-gray-500 font-normal">- {displayMembers.length}</span>
         </h3>
         {/* Search */}
         <div className="flex items-center gap-2 rounded-xl bg-white/8 px-3 py-2 border border-white/10 focus-within:border-indigo-500/40 transition-colors">
@@ -184,6 +201,59 @@ export function MemberPanel() {
           <span>{displayMembers.length} total</span>
         </div>
       </div>
+
+      {/* Member Profile Popover / Modal */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-xs rounded-2xl border border-white/10 bg-[hsl(var(--bg-raised))] p-5 shadow-2xl">
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="absolute top-3.5 right-3.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="relative mb-3">
+                {selectedUser.avatar ? (
+                  <img
+                    src={selectedUser.avatar}
+                    alt=""
+                    className="w-16 h-16 rounded-full object-cover ring-4 ring-indigo-500/20"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xl font-bold text-white shadow-lg">
+                    {getInitials(selectedUser.displayName || 'User')}
+                  </div>
+                )}
+                <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-green-400 ring-2 ring-[hsl(var(--bg-raised))]" />
+              </div>
+
+              <h4 className="font-bold text-white text-base">
+                {selectedUser.displayName || selectedUser.username}
+              </h4>
+              <p className="text-xs text-slate-400 mb-1">@{selectedUser.username || 'user'}</p>
+              {selectedUser.bio && (
+                <p className="text-xs text-slate-300 italic mb-4 max-w-[200px] truncate">
+                  "{selectedUser.bio}"
+                </p>
+              )}
+
+              <button
+                onClick={() => {
+                  if (!currentUser?.id || !selectedUser.id) return;
+                  const convId = getConversationId(currentUser.id, selectedUser.id);
+                  router.push(`/messages/${convId}`);
+                  setSelectedUser(null);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-500 text-white font-semibold text-xs hover:bg-brand-600 transition-all shadow-md shadow-brand-500/20 hover:scale-[1.02]"
+              >
+                <MessageSquare size={15} /> Send Direct Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

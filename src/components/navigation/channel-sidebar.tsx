@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, ChevronRight,
@@ -12,6 +12,8 @@ import {
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore, getDefaultCategories } from '@/stores/community-store';
+import { useDMStore } from '@/stores/dm-store';
+import { getInitials } from '@/lib/utils';
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -220,6 +222,19 @@ export function ChannelSidebar() {
   const channelId = pathname.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
 
   const { communities, categories, activeCommunity } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
+  const { conversations, initConversationsListener } = useDMStore();
+  const [dmSearch, setDmSearch] = useState('');
+
+  // Listen to DM conversations
+  useEffect(() => {
+    if (currentUser?.id) {
+      const unsub = initConversationsListener(currentUser.id);
+      return () => {
+        if (typeof unsub === 'function') unsub();
+      };
+    }
+  }, [currentUser?.id, initConversationsListener]);
   const community =
     communities.find((c) => c.id === communityId) ??
         (communityId
@@ -232,31 +247,97 @@ export function ChannelSidebar() {
 
   // ── DM View ────────────────────────────────────────────────────────────────
   if (isDMs) {
+    const filteredDMs = conversations.filter((c) => {
+      const otherUid = c.participants.find((p) => p !== currentUser?.id) || c.participants[0];
+      const details = c.participantDetails?.[otherUid];
+      const name = details?.displayName || details?.username || '';
+      return name.toLowerCase().includes(dmSearch.toLowerCase());
+    });
+
     return (
       <nav className="flex flex-col h-full bg-[hsl(var(--bg-raised))] border-r border-white/5" aria-label="Direct messages">
         <div className="flex-shrink-0 px-3 pt-4 pb-2">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-xs font-bold text-white uppercase tracking-wider">Direct Messages</span>
+            <button
+              onClick={() => router.push('/messages')}
+              className="p-1 rounded-md text-brand-400 hover:bg-brand-500/10 transition-colors"
+              title="Start a new DM"
+            >
+              <Plus size={15} />
+            </button>
+          </div>
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="search"
-              placeholder="Find a conversation..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-md bg-[hsl(var(--bg-sunken))] text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
+              placeholder="Filter DMs..."
+              value={dmSearch}
+              onChange={(e) => setDmSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-md bg-[hsl(var(--bg-sunken))] text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
-          <div className="py-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            Direct Messages
-          </div>
-          {/* No real DMs yet — show empty state */}
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <div className="w-10 h-10 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
-              <Users size={18} className="text-brand-400" />
+        <div className="flex-1 overflow-y-auto px-2 space-y-0.5 scrollbar-thin scrollbar-thumb-white/10">
+          {filteredDMs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+              <div className="w-10 h-10 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
+                <Users size={18} className="text-brand-400" />
+              </div>
+              <p className="text-xs text-slate-400">No active conversations</p>
+              <button
+                onClick={() => router.push('/messages')}
+                className="text-xs text-brand-400 font-medium hover:underline mt-1.5"
+              >
+                + New message
+              </button>
             </div>
-            <p className="text-xs text-slate-500">No conversations yet.</p>
-            <p className="text-xs text-slate-600 mt-1">Start a new message!</p>
-          </div>
+          ) : (
+            filteredDMs.map((dm) => {
+              const otherUid = dm.participants.find((p) => p !== currentUser?.id) || dm.participants[0];
+              const details = dm.participantDetails?.[otherUid] || {
+                displayName: 'Community Member',
+                username: 'user',
+                avatar: '',
+                status: 'online',
+              };
+              const name = details.displayName || details.username || 'User';
+              const isActive = pathname === `/messages/${dm.id}`;
+
+              return (
+                <button
+                  key={dm.id}
+                  onClick={() => router.push(`/messages/${dm.id}`)}
+                  className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded-lg transition-colors text-left ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  }`}
+                >
+                  <div className="relative flex-shrink-0">
+                    {details.avatar ? (
+                      <img src={details.avatar} alt={name} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+                        {getInitials(name)}
+                      </div>
+                    )}
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[hsl(var(--bg-raised))]"
+                      style={{
+                        backgroundColor: details.status === 'offline' ? '#6b7280' : '#22c55e',
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-xs font-medium text-slate-200">{name}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{dm.lastMessage || 'Sent a message'}</div>
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
 
         <UserFooter />
