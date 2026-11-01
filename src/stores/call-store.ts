@@ -46,25 +46,17 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:openrelay.metered.ca:80' },
     {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelay',
-      credential: 'openrelay',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelay',
-      credential: 'openrelay',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelay',
-      credential: 'openrelay',
-    },
-    {
-      urls: 'turns:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelay',
-      credential: 'openrelay',
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     },
   ],
   iceCandidatePoolSize: 10,
@@ -93,6 +85,7 @@ interface CallState {
   acceptCall: () => Promise<void>;
   declineCall: () => Promise<void>;
   endCall: () => Promise<void>;
+  retryCall: () => Promise<void>;
 
   toggleMute: () => void;
   toggleCamera: () => Promise<void>;
@@ -332,6 +325,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
         createdAt: serverTimestamp(),
       });
 
+      const candidateQueue: any[] = [];
       const applyCandidate = async (candData: any) => {
         if (!candData || !candData.candidate) return;
         const key = `${candData.candidate}_${candData.sdpMLineIndex}_${candData.sdpMid}`;
@@ -350,7 +344,6 @@ export const useCallStore = create<CallState>()((set, get) => ({
       };
 
       // 5. Listen to call document for answer / status change / document candidates
-      const candidateQueue: any[] = [];
       onSnapshot(callDocRef, async (snap) => {
         if (!snap.exists()) return;
         const data = snap.data() as CallSession;
@@ -385,7 +378,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
         }
 
         // Channel 2: Process recipient ICE candidates directly from main call document
-        if (Array.isArray(data.recipientCandidates) && pc.remoteDescription) {
+        if (Array.isArray(data.recipientCandidates)) {
           for (const cand of data.recipientCandidates) {
             applyCandidate(cand);
           }
@@ -617,7 +610,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
         }
 
         // Process caller ICE candidates from main document array
-        if (Array.isArray(data.callerCandidates) && pc.remoteDescription) {
+        if (Array.isArray(data.callerCandidates)) {
           for (const cand of data.callerCandidates) {
             applyCandidate(cand);
           }
@@ -684,6 +677,23 @@ export const useCallStore = create<CallState>()((set, get) => ({
       isDeafened: false,
       isScreenSharing: false,
     });
+  },
+
+  retryCall: async () => {
+    const { peerConnection, currentCall } = get();
+    if (!peerConnection || !currentCall || !db) return;
+    try {
+      set({ connectionState: 'connecting' });
+      const pc = peerConnection;
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      const callDocRef = doc(db, 'calls', currentCall.id);
+      await updateDoc(callDocRef, {
+        offer: { type: offer.type, sdp: offer.sdp },
+      });
+    } catch (err) {
+      console.warn('ICE restart notice:', err);
+    }
   },
 
   toggleMute: () => {
