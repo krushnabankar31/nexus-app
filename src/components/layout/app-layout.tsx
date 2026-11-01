@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useConnectionStore } from "@/stores/connection-store";
+import { useCommunityStore } from "@/stores/community-store";
 import { CommunityRail } from "@/components/navigation/community-rail";
 import { ChannelSidebar } from "@/components/navigation/channel-sidebar";
 import { MemberPanel } from "@/components/panels/member-panel";
@@ -17,6 +18,7 @@ import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { CreateCommunityModal } from "@/components/modals/create-community-modal";
 import { DeleteCommunityModal } from "@/components/modals/delete-community-modal";
 import { ConnectionRequestsModal } from "@/components/modals/connection-requests-modal";
+import { CommunityRequestsModal } from "@/components/modals/community-requests-modal";
 import { PresenceManager } from "@/components/presence/presence-manager";
 import { CallManager } from "@/components/calls/call-manager";
 
@@ -34,16 +36,19 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const { user: currentUser } = useAuthStore();
   const { initConnectionListeners } = useConnectionStore();
+  const { initUserPendingRequestsListener } = useCommunityStore();
 
-  // Initialize real-time connection listeners for private networking
+  // Initialize real-time connection and pending requests listeners
   useEffect(() => {
     if (currentUser?.id) {
       const unsub = initConnectionListeners(currentUser.id);
+      const unsubPending = initUserPendingRequestsListener(currentUser.id);
       return () => {
         if (typeof unsub === "function") unsub();
+        if (typeof unsubPending === "function") unsubPending();
       };
     }
-  }, [currentUser?.id, initConnectionListeners]);
+  }, [currentUser?.id, initConnectionListeners, initUserPendingRequestsListener]);
 
   // Close mobile drawer on escape
   useEffect(() => {
@@ -183,6 +188,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <CreateCommunityModal />
       <DeleteCommunityModal />
       <ConnectionRequestsModal />
+      <CommunityRequestsModal />
 
       {/* Global Real-Time Presence & Heartbeat */}
       <PresenceManager />

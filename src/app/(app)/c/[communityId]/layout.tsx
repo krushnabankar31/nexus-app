@@ -1,12 +1,19 @@
-﻿'use client';
+'use client';
 
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useCommunityStore } from '@/stores/community-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 export default function CommunityLayout({ children }: { children: React.ReactNode }) {
   const params = useParams<{ communityId: string }>();
-  const { communities, setActiveCommunity } = useCommunityStore();
+  const {
+    communities,
+    setActiveCommunity,
+    initCommunityMembersListener,
+    initCommunityJoinRequestsListener,
+  } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
 
   useEffect(() => {
     if (!params.communityId) return;
@@ -41,7 +48,31 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
       };
       setActiveCommunity(fallback);
     }
-  }, [params.communityId, communities, setActiveCommunity]);
+
+    // Subscribe to real-time community members subcollection
+    const unsubMembers = initCommunityMembersListener(params.communityId);
+
+    // If logged in, subscribe to real-time join requests for this community
+    let unsubRequests: (() => void) | undefined;
+    if (currentUser?.id) {
+      unsubRequests = initCommunityJoinRequestsListener(
+        params.communityId,
+        currentUser.id
+      );
+    }
+
+    return () => {
+      if (typeof unsubMembers === 'function') unsubMembers();
+      if (typeof unsubRequests === 'function') unsubRequests();
+    };
+  }, [
+    params.communityId,
+    communities,
+    setActiveCommunity,
+    currentUser?.id,
+    initCommunityMembersListener,
+    initCommunityJoinRequestsListener,
+  ]);
 
   return <>{children}</>;
 }
