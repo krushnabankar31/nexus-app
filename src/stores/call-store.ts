@@ -54,6 +54,11 @@ const RTC_CONFIG: RTCConfiguration = {
       username: 'openrelay',
       credential: 'openrelay',
     },
+    {
+      urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelay',
+      credential: 'openrelay',
+    },
   ],
   iceCandidatePoolSize: 10,
 };
@@ -249,21 +254,27 @@ export const useCallStore = create<CallState>()((set, get) => ({
         pc.addTrack(track, stream);
       });
 
-      // Handle remote tracks robustly (always create fresh MediaStream instance to trigger React re-renders)
+      // Handle remote tracks robustly with track map accumulation and onunmute trigger
       pc.ontrack = (event) => {
         console.log('Caller received remote track:', event.track.kind, event.track.id);
-        const incomingStream = event.streams && event.streams[0] ? event.streams[0] : null;
-        const newStream = new MediaStream();
-        if (incomingStream) {
-          incomingStream.getTracks().forEach((track) => newStream.addTrack(track));
-        } else {
-          const current = get().remoteStream;
-          if (current) {
-            current.getTracks().forEach((t) => newStream.addTrack(t));
-          }
-          newStream.addTrack(event.track);
+        const trackMap = new Map<string, MediaStreamTrack>();
+        const current = get().remoteStream;
+        if (current) {
+          current.getTracks().forEach((t) => trackMap.set(t.id, t));
         }
-        set({ remoteStream: newStream });
+        if (event.streams && event.streams[0]) {
+          event.streams[0].getTracks().forEach((t) => trackMap.set(t.id, t));
+        }
+        trackMap.set(event.track.id, event.track);
+        set({ remoteStream: new MediaStream(Array.from(trackMap.values())) });
+
+        event.track.onunmute = () => {
+          console.log('Caller remote track live frames flowing:', event.track.kind);
+          const curr = get().remoteStream;
+          if (curr) {
+            set({ remoteStream: new MediaStream(curr.getTracks()) });
+          }
+        };
       };
 
       pc.oniceconnectionstatechange = () => {
@@ -432,21 +443,27 @@ export const useCallStore = create<CallState>()((set, get) => ({
         pc.addTrack(track, stream);
       });
 
-      // Handle remote tracks (always create fresh MediaStream instance to trigger React re-renders)
+      // Handle remote tracks robustly with track map accumulation and onunmute trigger
       pc.ontrack = (event) => {
         console.log('Recipient received remote track:', event.track.kind, event.track.id);
-        const incomingStream = event.streams && event.streams[0] ? event.streams[0] : null;
-        const newStream = new MediaStream();
-        if (incomingStream) {
-          incomingStream.getTracks().forEach((track) => newStream.addTrack(track));
-        } else {
-          const current = get().remoteStream;
-          if (current) {
-            current.getTracks().forEach((t) => newStream.addTrack(t));
-          }
-          newStream.addTrack(event.track);
+        const trackMap = new Map<string, MediaStreamTrack>();
+        const current = get().remoteStream;
+        if (current) {
+          current.getTracks().forEach((t) => trackMap.set(t.id, t));
         }
-        set({ remoteStream: newStream });
+        if (event.streams && event.streams[0]) {
+          event.streams[0].getTracks().forEach((t) => trackMap.set(t.id, t));
+        }
+        trackMap.set(event.track.id, event.track);
+        set({ remoteStream: new MediaStream(Array.from(trackMap.values())) });
+
+        event.track.onunmute = () => {
+          console.log('Recipient remote track live frames flowing:', event.track.kind);
+          const curr = get().remoteStream;
+          if (curr) {
+            set({ remoteStream: new MediaStream(curr.getTracks()) });
+          }
+        };
       };
 
       pc.oniceconnectionstatechange = () => {
@@ -541,10 +558,14 @@ export const useCallStore = create<CallState>()((set, get) => ({
   // End active call cleanly
   endCall: async () => {
     stopRingtone();
-    const { currentCall, peerConnection, localStream } = get();
+    const { currentCall, peerConnection, localStream, remoteStream } = get();
 
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    if (remoteStream) {
+      remoteStream.getTracks().forEach((track) => track.stop());
     }
 
     if (peerConnection) {
