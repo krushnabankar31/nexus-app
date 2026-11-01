@@ -8,12 +8,15 @@
 import React, { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useUiStore } from "@/stores/ui-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { useConnectionStore } from "@/stores/connection-store";
 import { CommunityRail } from "@/components/navigation/community-rail";
 import { ChannelSidebar } from "@/components/navigation/channel-sidebar";
 import { MemberPanel } from "@/components/panels/member-panel";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { CreateCommunityModal } from "@/components/modals/create-community-modal";
 import { DeleteCommunityModal } from "@/components/modals/delete-community-modal";
+import { ConnectionRequestsModal } from "@/components/modals/connection-requests-modal";
 import { PresenceManager } from "@/components/presence/presence-manager";
 import { CallManager } from "@/components/calls/call-manager";
 
@@ -28,6 +31,19 @@ export function AppLayout({ children }: AppLayoutProps) {
     mobileDrawerContent,
     closeMobileDrawer,
   } = useUiStore();
+
+  const { user: currentUser } = useAuthStore();
+  const { initConnectionListeners } = useConnectionStore();
+
+  // Initialize real-time connection listeners for private networking
+  useEffect(() => {
+    if (currentUser?.id) {
+      const unsub = initConnectionListeners(currentUser.id);
+      return () => {
+        if (typeof unsub === "function") unsub();
+      };
+    }
+  }, [currentUser?.id, initConnectionListeners]);
 
   // Close mobile drawer on escape
   useEffect(() => {
@@ -166,6 +182,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Global Modals */}
       <CreateCommunityModal />
       <DeleteCommunityModal />
+      <ConnectionRequestsModal />
 
       {/* Global Real-Time Presence & Heartbeat */}
       <PresenceManager />

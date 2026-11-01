@@ -7,13 +7,15 @@ import {
   Mail, Check, X, Sparkles, Hash, ArrowRight, Camera,
   Share2, Copy, ExternalLink, Github, Twitter, Instagram,
   Linkedin, Globe, Flame, Zap, Award, Sliders, Palette,
-  Layers, Activity, Clock, Compass, Heart, Phone, Video
+  Layers, Activity, Clock, Compass, Heart, Phone, Video,
+  UserPlus, UserCheck, Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore } from '@/stores/community-store';
 import { useDMStore, getConversationId } from '@/stores/dm-store';
 import { useCallStore } from '@/stores/call-store';
+import { useConnectionStore } from '@/stores/connection-store';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { cn, getInitials, formatDate, getUserEffectiveStatus } from '@/lib/utils';
@@ -177,6 +179,55 @@ export default function UserProfilePage() {
   const [editWebsite, setEditWebsite] = useState('');
   const [editInterests, setEditInterests] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isConnActionLoading, setIsConnActionLoading] = useState(false);
+
+  const {
+    getConnectionStatus,
+    sendConnectionRequest,
+    acceptConnectionRequest,
+    rejectConnectionRequest,
+    removeConnection,
+    incomingRequests,
+  } = useConnectionStore();
+
+  const connectionStatus = isOwn
+    ? 'accepted'
+    : currentUser?.id && (profileUser?.id || userId)
+    ? getConnectionStatus(currentUser.id, profileUser?.id || userId)
+    : 'none';
+
+  const handleSendConnection = async () => {
+    if (!currentUser || !profileUser) return;
+    setIsConnActionLoading(true);
+    await sendConnectionRequest(currentUser, profileUser);
+    setIsConnActionLoading(false);
+  };
+
+  const handleAcceptConnection = async () => {
+    if (!currentUser || !profileUser) return;
+    const req = incomingRequests.find((r) => r.sender_id === profileUser.id);
+    if (req) {
+      setIsConnActionLoading(true);
+      await acceptConnectionRequest(req, currentUser);
+      setIsConnActionLoading(false);
+    }
+  };
+
+  const handleRejectConnection = async () => {
+    const req = incomingRequests.find((r) => r.sender_id === profileUser?.id);
+    if (req) {
+      setIsConnActionLoading(true);
+      await rejectConnectionRequest(req);
+      setIsConnActionLoading(false);
+    }
+  };
+
+  const handleRemoveConnection = async () => {
+    if (!currentUser?.id || !profileUser?.id) return;
+    setIsConnActionLoading(true);
+    await removeConnection(currentUser.id, profileUser.id);
+    setIsConnActionLoading(false);
+  };
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -503,15 +554,20 @@ export default function UserProfilePage() {
                 <Edit3 size={14} />
                 <span>Edit Profile</span>
               </button>
-            ) : (
+            ) : connectionStatus === 'accepted' ? (
               <div className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                  <UserCheck size={13} />
+                  <span>Connected</span>
+                </span>
+
                 <button
                   onClick={() => {
                     if (!currentUser?.id || !user?.id) return;
                     const convId = getConversationId(currentUser.id, user.id);
                     router.push(`/messages/${convId}`);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 >
                   <MessageSquare size={14} />
                   <span>Message</span>
@@ -523,7 +579,7 @@ export default function UserProfilePage() {
                     const convId = getConversationId(currentUser.id, user.id);
                     startCall(currentUser, user, 'voice', convId);
                   }}
-                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-400 hover:text-emerald-300 border border-white/10 transition-all"
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-400 hover:text-emerald-300 border border-white/10 transition-all cursor-pointer"
                   title="Voice Call"
                 >
                   <Phone size={16} />
@@ -535,17 +591,147 @@ export default function UserProfilePage() {
                     const convId = getConversationId(currentUser.id, user.id);
                     startCall(currentUser, user, 'video', convId);
                   }}
-                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-400 hover:text-indigo-300 border border-white/10 transition-all"
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-400 hover:text-indigo-300 border border-white/10 transition-all cursor-pointer"
                   title="Video Call"
                 >
                   <Video size={16} />
                 </button>
+
+                <button
+                  onClick={handleRemoveConnection}
+                  disabled={isConnActionLoading}
+                  className="px-2.5 py-2 rounded-xl bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-slate-400 text-xs font-semibold transition-all cursor-pointer"
+                  title="Disconnect"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {connectionStatus === 'none' && (
+                  <button
+                    onClick={handleSendConnection}
+                    disabled={isConnActionLoading}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-brand-500/20 transition-all cursor-pointer"
+                  >
+                    <UserPlus size={14} />
+                    <span>{isConnActionLoading ? 'Sending...' : 'Connect'}</span>
+                  </button>
+                )}
+                {connectionStatus === 'pending_sent' && (
+                  <span className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-semibold">
+                    <Clock size={14} />
+                    <span>Pending...</span>
+                  </span>
+                )}
+                {connectionStatus === 'pending_received' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleAcceptConnection}
+                      disabled={isConnActionLoading}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={handleRejectConnection}
+                      disabled={isConnActionLoading}
+                      className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-slate-300 text-xs font-semibold cursor-pointer"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+                {connectionStatus === 'rejected' && (
+                  <button
+                    onClick={handleSendConnection}
+                    disabled={isConnActionLoading}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold cursor-pointer"
+                  >
+                    <UserPlus size={14} />
+                    <span>Re-send Request</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── 3. BADGES & TROPHY PILLS ─────────────────────────────────── */}
+        {/* ── PRIVACY LOCK SCREEN (For Non-Connected Users) ── */}
+        {!isOwn && connectionStatus !== 'accepted' ? (
+          <div className="my-8 rounded-3xl border border-white/10 bg-[hsl(var(--bg-raised))] p-8 sm:p-12 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-indigo-500 to-purple-500" />
+
+            <div className="w-16 h-16 rounded-3xl bg-brand-500/10 border border-brand-500/20 text-brand-400 mx-auto flex items-center justify-center mb-4 shadow-lg shadow-brand-500/10">
+              <Lock size={32} />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-semibold text-slate-400 mb-3">
+              <Shield size={12} className="text-brand-400" />
+              <span>Nexus Private Profile</span>
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-extrabold text-white mb-2">
+              This Profile is Private
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mb-6 leading-relaxed">
+              In Nexus, all user profiles, communities, and activity remain completely private. Connect with {displayName} to view their full profile, communities, and activity.
+            </p>
+
+            <div className="inline-flex items-center justify-center gap-3">
+              {connectionStatus === 'none' && (
+                <button
+                  onClick={handleSendConnection}
+                  disabled={isConnActionLoading}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-bold shadow-xl shadow-brand-500/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                >
+                  <UserPlus size={16} />
+                  <span>{isConnActionLoading ? 'Sending...' : 'Connect / Send Request'}</span>
+                </button>
+              )}
+
+              {connectionStatus === 'pending_sent' && (
+                <div className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
+                  <Clock size={16} />
+                  <span>Connection Request Sent · Waiting for approval</span>
+                </div>
+              )}
+
+              {connectionStatus === 'pending_received' && (
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={handleAcceptConnection}
+                    disabled={isConnActionLoading}
+                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    <Check size={16} />
+                    <span>Accept Connection</span>
+                  </button>
+                  <button
+                    onClick={handleRejectConnection}
+                    disabled={isConnActionLoading}
+                    className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+
+              {connectionStatus === 'rejected' && (
+                <button
+                  onClick={handleSendConnection}
+                  disabled={isConnActionLoading}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-lg shadow-brand-500/25 transition-all cursor-pointer"
+                >
+                  <UserPlus size={16} />
+                  <span>Re-send Connection Request</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── 3. BADGES & TROPHY PILLS ─────────────────────────────────── */}
         <div className="flex flex-wrap gap-2 mb-5">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-300 text-xs font-semibold shadow-sm">
             <Crown size={13} className="text-amber-400" />
@@ -1014,8 +1200,10 @@ export default function UserProfilePage() {
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </>
+      )}
+    </div>
+  </div>
 
       {/* ── 8. COMPREHENSIVE EDIT PROFILE MODAL ───────────────────────── */}
       {showEditModal && (
