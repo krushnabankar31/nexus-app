@@ -44,6 +44,7 @@ export function CallManager() {
     toggleDeafen,
     toggleScreenShare,
     setCallDuration,
+    retryCall,
   } = useCallStore();
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
@@ -385,10 +386,19 @@ export function CallManager() {
                               <span>Connected · Initializing camera frames...</span>
                             </span>
                           ) : connectionState === 'failed' ? (
-                            <span className="flex items-center gap-1.5 text-red-400">
-                              <span className="w-2 h-2 rounded-full bg-red-400" />
-                              <span>Connection Failed · Firewall or relay blocked</span>
-                            </span>
+                            <div className="flex flex-col items-center gap-2">
+                              <span className="flex items-center gap-1.5 text-red-400">
+                                <span className="w-2 h-2 rounded-full bg-red-400" />
+                                <span>Connection Failed · Firewall or relay blocked</span>
+                              </span>
+                              <button
+                                onClick={retryCall}
+                                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer pointer-events-auto"
+                              >
+                                <Sparkles size={14} />
+                                <span>Retry Reconnect</span>
+                              </button>
+                            </div>
                           ) : (
                             <span className="flex items-center gap-1.5 text-amber-300 animate-pulse">
                               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
