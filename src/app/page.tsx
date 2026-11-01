@@ -723,8 +723,8 @@ export default function LandingPage() {
   }, [isAuthenticated, user?.id, router]);
 
   useEffect(() => {
-    const unsubC = initCommunitiesListener();
-    const unsubM = initMembersListener();
+    const unsubC = typeof initCommunitiesListener === 'function' ? initCommunitiesListener() : () => {};
+    const unsubM = typeof initMembersListener === 'function' ? initMembersListener() : () => {};
     return () => {
       if (typeof unsubC === 'function') unsubC();
       if (typeof unsubM === 'function') unsubM();

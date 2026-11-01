@@ -40,9 +40,9 @@ function HeroCard({ community, onClick }: { community: any; onClick: () => void 
   } = useCommunityStore();
 
   const isOwner = !!(currentUser?.id && community.ownerId === currentUser.id);
-  const isJoined = isOwner || joinedCommunityIds.includes(community.id);
+  const isJoined = isOwner || (joinedCommunityIds || []).includes(community.id);
   const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
-  const isPending = userPendingCommunityIds.includes(community.id);
+  const isPending = (userPendingCommunityIds || []).includes(community.id);
 
   const handleAction = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -169,9 +169,9 @@ function CommunityCard({ community, rank }: { community: any; rank?: number }) {
   } = useCommunityStore();
 
   const isOwner = !!(currentUser?.id && community.ownerId === currentUser.id);
-  const isJoined = isOwner || joinedCommunityIds.includes(community.id);
+  const isJoined = isOwner || (joinedCommunityIds || []).includes(community.id);
   const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
-  const isPending = userPendingCommunityIds.includes(community.id);
+  const isPending = (userPendingCommunityIds || []).includes(community.id);
 
   const handleClick = () => {
     setActiveCommunity(community);

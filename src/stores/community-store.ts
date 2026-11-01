@@ -82,6 +82,7 @@ interface CommunityState {
 
   setIsJoinRequestsModalOpen: (open: boolean) => void;
   initCommunitiesListener: () => () => void;
+  initMembersListener: () => () => void;
   initCommunityMembersListener: (communityId: string) => () => void;
   initCommunityJoinRequestsListener: (communityId: string, currentUserId: string) => () => void;
   initUserPendingRequestsListener: (currentUserId: string) => () => void;
@@ -222,6 +223,10 @@ export const useCommunityStore = create<CommunityState>()(
           console.warn('Communities listener error:', err);
           return () => {};
         }
+      },
+
+      initMembersListener: () => {
+        return () => {};
       },
 
       initCommunityMembersListener: (communityId: string) => {

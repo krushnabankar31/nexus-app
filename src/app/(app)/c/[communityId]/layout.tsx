@@ -50,11 +50,14 @@ export default function CommunityLayout({ children }: { children: React.ReactNod
     }
 
     // Subscribe to real-time community members subcollection
-    const unsubMembers = initCommunityMembersListener(params.communityId);
+    const unsubMembers =
+      typeof initCommunityMembersListener === 'function'
+        ? initCommunityMembersListener(params.communityId)
+        : undefined;
 
     // If logged in, subscribe to real-time join requests for this community
     let unsubRequests: (() => void) | undefined;
-    if (currentUser?.id) {
+    if (currentUser?.id && typeof initCommunityJoinRequestsListener === 'function') {
       unsubRequests = initCommunityJoinRequestsListener(
         params.communityId,
         currentUser.id
