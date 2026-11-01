@@ -515,7 +515,7 @@ export function MemberPanel() {
                 <h4 className="font-bold text-white text-base">
                   {selectedUser.displayName || selectedUser.username}
                 </h4>
-                {selectedConnectionStatus === 'connected' && (
+                {selectedConnectionStatus === 'accepted' && (
                   <UserCheck size={14} className="text-indigo-400" />
                 )}
               </div>
@@ -531,7 +531,7 @@ export function MemberPanel() {
               {/* 1-on-1 Connection Status Banner */}
               {isInsideCommunity && currentUser?.id !== selectedUser.id && (
                 <div className="w-full my-2">
-                  {selectedConnectionStatus === 'connected' ? (
+                  {selectedConnectionStatus === 'accepted' ? (
                     <div className="flex items-center justify-center gap-1.5 py-1 px-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
                       <Check size={12} /> Connected Friends
                     </div>
@@ -614,7 +614,7 @@ export function MemberPanel() {
                 >
                   View Full Profile <ExternalLink size={10} />
                 </button>
-                {selectedConnectionStatus === 'connected' && (
+                {selectedConnectionStatus === 'accepted' && (
                   <button
                     onClick={() => {
                       if (currentUser?.id && selectedUser.id) {
