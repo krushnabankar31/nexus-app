@@ -23,6 +23,11 @@ export interface User {
   createdAt: string;
   badges: Badge[];
   links: SocialLink[];
+  bannerPreset?: string | null;
+  accentColor?: string | null;
+  interests?: string[];
+  location?: string | null;
+  pronouns?: string | null;
 }
 
 export interface Badge {
