@@ -2,7 +2,38 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Community, Channel, ChannelCategory, CommunityMember, User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+  writeBatch,
+  increment,
+  query,
+  where,
+  getDocs,
+} from 'firebase/firestore';
+import toast from 'react-hot-toast';
+
+export interface CommunityJoinRequest {
+  request_id: string;
+  community_id: string;
+  community_name: string;
+  community_icon?: string;
+  owner_id: string;
+  user_id: string;
+  user?: {
+    id: string;
+    displayName: string;
+    username: string;
+    avatar: string;
+  };
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at: string;
+}
 
 export function canDeleteCommunity(
   community: Community | null | undefined,
@@ -45,17 +76,27 @@ interface CommunityState {
   categories: ChannelCategory[];
   activeChannel: Channel | null;
   members: CommunityMember[];
+  joinRequests: CommunityJoinRequest[];
+  userPendingCommunityIds: string[];
+  isJoinRequestsModalOpen: boolean;
 
+  setIsJoinRequestsModalOpen: (open: boolean) => void;
   initCommunitiesListener: () => () => void;
-  initMembersListener: () => () => void;
+  initCommunityMembersListener: (communityId: string) => () => void;
+  initCommunityJoinRequestsListener: (communityId: string, currentUserId: string) => () => void;
+  initUserPendingRequestsListener: (currentUserId: string) => () => void;
   setCommunities: (communities: Community[]) => void;
   setActiveCommunity: (community: Community | null) => void;
   setActiveChannel: (channel: Channel | null) => void;
   joinCommunity: (communityId: string) => void;
   leaveCommunity: (communityId: string) => void;
   updateChannel: (channelId: string, updates: Partial<Channel>) => void;
-  addCommunity: (community: Community) => Promise<void>;
+  addCommunity: (community: Community, creator?: User) => Promise<void>;
   deleteCommunity: (communityId: string) => Promise<void>;
+  joinPublicCommunity: (community: Community, user: User) => Promise<boolean>;
+  requestToJoinPrivateCommunity: (community: Community, user: User) => Promise<boolean>;
+  acceptJoinRequest: (request: CommunityJoinRequest) => Promise<boolean>;
+  rejectJoinRequest: (request: CommunityJoinRequest) => Promise<boolean>;
 }
 
 export function getDefaultCategories(communityId: string): ChannelCategory[] {
@@ -101,7 +142,7 @@ export function getDefaultCategories(communityId: string): ChannelCategory[] {
           position: 1,
         },
         {
-          id: `ch_${communityId}_chat`,
+          id: `ch_${communityId}_chitchat`,
           name: 'chit-chat',
           type: 'text',
           categoryId: `cat_${communityId}_text`,
@@ -139,6 +180,11 @@ export const useCommunityStore = create<CommunityState>()(
       categories: [],
       activeChannel: null,
       members: [],
+      joinRequests: [],
+      userPendingCommunityIds: [],
+      isJoinRequestsModalOpen: false,
+
+      setIsJoinRequestsModalOpen: (open: boolean) => set({ isJoinRequestsModalOpen: open }),
 
       initCommunitiesListener: () => {
         if (!isFirebaseConfigured() || !db) {
@@ -178,9 +224,124 @@ export const useCommunityStore = create<CommunityState>()(
         }
       },
 
-      initMembersListener: () => {
-        // Members are now strictly managed through private connections and community members
-        return () => {};
+      initCommunityMembersListener: (communityId: string) => {
+        if (!isFirebaseConfigured() || !db || !communityId) {
+          return () => {};
+        }
+
+        try {
+          const membersCol = collection(db, 'communities', communityId, 'members');
+          const unsubscribe = onSnapshot(membersCol, (snapshot) => {
+            const list: CommunityMember[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              const u = data.user || {};
+              list.push({
+                userId: docSnap.id,
+                communityId,
+                nickname: data.nickname || null,
+                roles: data.roles || [
+                  {
+                    id: 'role-member',
+                    communityId,
+                    name: data.role === 'owner' ? 'Admin / Owner' : 'Member',
+                    color: data.role === 'owner' ? '#ef4444' : '#6b7280',
+                    icon: null,
+                    position: data.role === 'owner' ? 100 : 1,
+                    isDefault: true,
+                    isMentionable: false,
+                    isHoisted: false,
+                    permissions: ['send_messages'],
+                  },
+                ],
+                joinedAt: data.joinedAt || new Date().toISOString(),
+                user: {
+                  id: docSnap.id,
+                  displayName: u.displayName || u.username || 'Community Member',
+                  username: u.username || 'member',
+                  avatar: u.avatar || '',
+                  status: u.status || 'online',
+                  email: '',
+                  bio: 'Member of ' + (get().activeCommunity?.name || 'Community'),
+                  createdAt: data.joinedAt || '',
+                  badges: [],
+                  links: [],
+                  banner: null,
+                  customStatus: null,
+                  isVerified: false,
+                  isPremium: false,
+                },
+              });
+            });
+
+            set({ members: list });
+          });
+
+          return unsubscribe;
+        } catch (err) {
+          console.warn('Community members listener error:', err);
+          return () => {};
+        }
+      },
+
+      initCommunityJoinRequestsListener: (communityId: string, currentUserId: string) => {
+        if (!isFirebaseConfigured() || !db || !communityId) {
+          return () => {};
+        }
+
+        try {
+          const requestsCol = collection(db, 'community_join_requests');
+          const q = query(
+            requestsCol,
+            where('community_id', '==', communityId),
+            where('status', '==', 'pending')
+          );
+
+          const unsubscribe = onSnapshot(q, (snapshot) => {
+            const list: CommunityJoinRequest[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as CommunityJoinRequest;
+              list.push({ ...data, request_id: docSnap.id });
+            });
+            set({ joinRequests: list });
+          });
+
+          return unsubscribe;
+        } catch (err) {
+          console.warn('Community join requests listener error:', err);
+          return () => {};
+        }
+      },
+
+      initUserPendingRequestsListener: (currentUserId: string) => {
+        if (!isFirebaseConfigured() || !db || !currentUserId) {
+          return () => {};
+        }
+
+        try {
+          const requestsCol = collection(db, 'community_join_requests');
+          const q = query(
+            requestsCol,
+            where('user_id', '==', currentUserId),
+            where('status', '==', 'pending')
+          );
+
+          const unsubscribe = onSnapshot(q, (snapshot) => {
+            const pendingIds: string[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as CommunityJoinRequest;
+              if (data.community_id) {
+                pendingIds.push(data.community_id);
+              }
+            });
+            set({ userPendingCommunityIds: pendingIds });
+          });
+
+          return unsubscribe;
+        } catch (err) {
+          console.warn('User pending requests listener error:', err);
+          return () => {};
+        }
       },
 
       setCommunities: (communities) => set({ communities }),
@@ -221,7 +382,7 @@ export const useCommunityStore = create<CommunityState>()(
         }));
       },
 
-      addCommunity: async (community) => {
+      addCommunity: async (community, creator) => {
         const categories = getDefaultCategories(community.id);
         set((state) => ({
           communities: [community, ...state.communities.filter((c) => c.id !== community.id)],
@@ -233,10 +394,43 @@ export const useCommunityStore = create<CommunityState>()(
 
         if (isFirebaseConfigured() && db) {
           try {
-            await setDoc(doc(db, 'communities', community.id), {
+            const batch = writeBatch(db);
+            const commRef = doc(db, 'communities', community.id);
+            batch.set(commRef, {
               ...community,
               updatedAt: serverTimestamp(),
             });
+
+            // Automatically add the creator as the Owner in members subcollection
+            if (creator?.id) {
+              const ownerMemberRef = doc(db, 'communities', community.id, 'members', creator.id);
+              batch.set(ownerMemberRef, {
+                userId: creator.id,
+                communityId: community.id,
+                role: 'owner',
+                joinedAt: new Date().toISOString(),
+                roles: [
+                  {
+                    id: 'role-admin',
+                    communityId: community.id,
+                    name: 'Admin / Owner',
+                    color: '#ef4444',
+                    position: 100,
+                    isDefault: false,
+                    permissions: ['administrator'],
+                  },
+                ],
+                user: {
+                  id: creator.id,
+                  displayName: creator.displayName || creator.username || 'Owner',
+                  username: creator.username || 'user',
+                  avatar: creator.avatar || '',
+                  status: creator.status || 'online',
+                },
+              });
+            }
+
+            await batch.commit();
           } catch (err) {
             console.warn('Failed to sync community to Firestore:', err);
           }
@@ -265,6 +459,173 @@ export const useCommunityStore = create<CommunityState>()(
             console.warn('Failed to delete community from Firestore:', err);
             throw err;
           }
+        }
+      },
+
+      joinPublicCommunity: async (community: Community, user: User) => {
+        if (!isFirebaseConfigured() || !db || !user?.id) return false;
+
+        try {
+          const memberDocRef = doc(db, 'communities', community.id, 'members', user.id);
+          const now = new Date().toISOString();
+
+          await setDoc(memberDocRef, {
+            userId: user.id,
+            communityId: community.id,
+            role: 'member',
+            joinedAt: now,
+            roles: [
+              {
+                id: 'role-member',
+                communityId: community.id,
+                name: 'Member',
+                color: '#6b7280',
+                position: 1,
+                isDefault: true,
+                permissions: ['send_messages'],
+              },
+            ],
+            user: {
+              id: user.id,
+              displayName: user.displayName || user.username || 'Member',
+              username: user.username || 'member',
+              avatar: user.avatar || '',
+              status: user.status || 'online',
+            },
+          });
+
+          // Increment community memberCount
+          const commRef = doc(db, 'communities', community.id);
+          await setDoc(commRef, { memberCount: increment(1) }, { merge: true });
+
+          set((state) => ({
+            joinedCommunityIds: state.joinedCommunityIds.includes(community.id)
+              ? state.joinedCommunityIds
+              : [...state.joinedCommunityIds, community.id],
+          }));
+
+          toast.success(`Joined ${community.name}!`);
+          return true;
+        } catch (err) {
+          console.error('Failed to join public community:', err);
+          toast.error('Failed to join community');
+          return false;
+        }
+      },
+
+      requestToJoinPrivateCommunity: async (community: Community, user: User) => {
+        if (!isFirebaseConfigured() || !db || !user?.id) return false;
+
+        try {
+          const reqId = `${community.id}_${user.id}`;
+          const reqDocRef = doc(db, 'community_join_requests', reqId);
+          const now = new Date().toISOString();
+
+          await setDoc(reqDocRef, {
+            request_id: reqId,
+            community_id: community.id,
+            community_name: community.name,
+            community_icon: community.icon || '🌐',
+            owner_id: community.ownerId || '',
+            user_id: user.id,
+            user: {
+              id: user.id,
+              displayName: user.displayName || user.username || 'Member',
+              username: user.username || 'member',
+              avatar: user.avatar || '',
+            },
+            status: 'pending',
+            created_at: now,
+            updated_at: now,
+          });
+
+          set((state) => ({
+            userPendingCommunityIds: [...state.userPendingCommunityIds, community.id],
+          }));
+
+          toast.success('Join request sent to community owner!');
+          return true;
+        } catch (err) {
+          console.error('Failed to send join request:', err);
+          toast.error('Failed to send join request');
+          return false;
+        }
+      },
+
+      acceptJoinRequest: async (req: CommunityJoinRequest) => {
+        if (!isFirebaseConfigured() || !db) return false;
+
+        try {
+          const batch = writeBatch(db);
+          const now = new Date().toISOString();
+
+          // 1. Add user to community members
+          const memberDocRef = doc(db, 'communities', req.community_id, 'members', req.user_id);
+          batch.set(memberDocRef, {
+            userId: req.user_id,
+            communityId: req.community_id,
+            role: 'member',
+            joinedAt: now,
+            roles: [
+              {
+                id: 'role-member',
+                communityId: req.community_id,
+                name: 'Member',
+                color: '#6b7280',
+                position: 1,
+                isDefault: true,
+                permissions: ['send_messages'],
+              },
+            ],
+            user: {
+              id: req.user_id,
+              displayName: req.user?.displayName || 'Member',
+              username: req.user?.username || 'member',
+              avatar: req.user?.avatar || '',
+              status: 'online',
+            },
+          });
+
+          // 2. Increment community memberCount
+          const commRef = doc(db, 'communities', req.community_id);
+          batch.set(commRef, { memberCount: increment(1) }, { merge: true });
+
+          // 3. Mark request as accepted
+          const reqDocRef = doc(db, 'community_join_requests', req.request_id);
+          batch.update(reqDocRef, { status: 'accepted', updated_at: now });
+
+          await batch.commit();
+
+          set((state) => ({
+            joinRequests: state.joinRequests.filter((r) => r.request_id !== req.request_id),
+          }));
+
+          toast.success(`Approved ${req.user?.displayName || 'User'}!`);
+          return true;
+        } catch (err) {
+          console.error('Failed to accept join request:', err);
+          toast.error('Failed to accept request');
+          return false;
+        }
+      },
+
+      rejectJoinRequest: async (req: CommunityJoinRequest) => {
+        if (!isFirebaseConfigured() || !db) return false;
+
+        try {
+          const reqDocRef = doc(db, 'community_join_requests', req.request_id);
+          await setDoc(reqDocRef, { status: 'rejected', updated_at: new Date().toISOString() }, { merge: true });
+
+          set((state) => ({
+            joinRequests: state.joinRequests.filter((r) => r.request_id !== req.request_id),
+          }));
+
+          toast('Join request declined', { icon: '✕' });
+          return true;
+        } catch (err) {
+          console.error('Failed to decline join request:', err);
+          toast.error('Failed to decline request');
+          return false;
         }
       },
     }),

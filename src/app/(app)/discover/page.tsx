@@ -1,12 +1,14 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, Users, Flame, Sparkles, TrendingUp,
   Zap, CheckCircle2, Globe, ChevronRight, Crown, Plus,
+  Lock, Clock, Check,
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
 
 const CATEGORIES = [
@@ -28,7 +30,37 @@ function fmtNum(n: number) {
 }
 
 function HeroCard({ community, onClick }: { community: any; onClick: () => void }) {
-  const [joined, setJoined] = useState(false);
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+  const {
+    joinedCommunityIds,
+    userPendingCommunityIds,
+    joinPublicCommunity,
+    requestToJoinPrivateCommunity,
+  } = useCommunityStore();
+
+  const isOwner = !!(currentUser?.id && community.ownerId === currentUser.id);
+  const isJoined = isOwner || joinedCommunityIds.includes(community.id);
+  const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
+  const isPending = userPendingCommunityIds.includes(community.id);
+
+  const handleAction = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    if (isJoined) {
+      onClick();
+      return;
+    }
+    if (isPrivate) {
+      if (isPending) return;
+      await requestToJoinPrivateCommunity(community, currentUser);
+    } else {
+      await joinPublicCommunity(community, currentUser);
+    }
+  };
 
   return (
     <div
@@ -50,7 +82,16 @@ function HeroCard({ community, onClick }: { community: any; onClick: () => void 
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
 
-      <div className="absolute top-4 right-4 flex gap-2">
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {isPrivate ? (
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 backdrop-blur border border-amber-500/30 text-amber-300 text-xs font-semibold">
+            <Lock size={11} /> Private
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/20 backdrop-blur border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+            <Globe size={11} /> Public
+          </span>
+        )}
         {community.isVerified && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-500/90 backdrop-blur text-white text-xs font-semibold">
             <CheckCircle2 size={11} /> Verified
@@ -86,17 +127,30 @@ function HeroCard({ community, onClick }: { community: any; onClick: () => void 
         </div>
 
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setJoined(!joined);
-          }}
-          className={`flex-shrink-0 px-4 py-1.5 rounded-full font-semibold text-xs transition-all ${
-            joined
+          onClick={handleAction}
+          className={`flex-shrink-0 px-4 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center gap-1.5 ${
+            isJoined
               ? 'bg-white/20 backdrop-blur text-white border border-white/30'
+              : isPrivate && isPending
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              : isPrivate
+              ? 'bg-amber-500 text-black hover:bg-amber-400'
               : 'bg-white text-black hover:bg-white/90'
           }`}
         >
-          {joined ? 'Joined ✓' : 'Join'}
+          {isJoined ? (
+            'Joined ✓'
+          ) : isPrivate && isPending ? (
+            <>
+              <Clock size={12} /> Pending
+            </>
+          ) : isPrivate ? (
+            <>
+              <Lock size={12} /> Request
+            </>
+          ) : (
+            '+ Join'
+          )}
         </button>
       </div>
     </div>
@@ -105,12 +159,41 @@ function HeroCard({ community, onClick }: { community: any; onClick: () => void 
 
 function CommunityCard({ community, rank }: { community: any; rank?: number }) {
   const router = useRouter();
-  const { setActiveCommunity } = useCommunityStore();
-  const [joined, setJoined] = useState(false);
+  const { user: currentUser } = useAuthStore();
+  const {
+    setActiveCommunity,
+    joinedCommunityIds,
+    userPendingCommunityIds,
+    joinPublicCommunity,
+    requestToJoinPrivateCommunity,
+  } = useCommunityStore();
+
+  const isOwner = !!(currentUser?.id && community.ownerId === currentUser.id);
+  const isJoined = isOwner || joinedCommunityIds.includes(community.id);
+  const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
+  const isPending = userPendingCommunityIds.includes(community.id);
 
   const handleClick = () => {
     setActiveCommunity(community);
     router.push(`/c/${community.id}`);
+  };
+
+  const handleAction = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    if (isJoined) {
+      handleClick();
+      return;
+    }
+    if (isPrivate) {
+      if (isPending) return;
+      await requestToJoinPrivateCommunity(community, currentUser);
+    } else {
+      await joinPublicCommunity(community, currentUser);
+    }
   };
 
   return (
@@ -125,6 +208,19 @@ function CommunityCard({ community, rank }: { community: any; rank?: number }) {
           <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${community.accentColor ?? '#6366f1'}44, #1a1b1e)` }} />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--bg-raised))] via-transparent to-transparent" />
+
+        {/* Privacy Pill Badge */}
+        <div className="absolute top-2.5 right-2.5">
+          {isPrivate ? (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
+              <Lock size={9} /> Private
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 backdrop-blur-md border border-indigo-500/30 text-indigo-300 text-[10px] font-semibold">
+              <Globe size={9} /> Public
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="px-4 pb-4 pt-1 flex-1 flex flex-col">
@@ -140,12 +236,30 @@ function CommunityCard({ community, rank }: { community: any; rank?: number }) {
             )}
           </div>
           <button
-            onClick={(e) => { e.stopPropagation(); setJoined(!joined); }}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-              joined ? 'bg-white/10 text-white border border-white/20' : 'bg-white/10 text-white hover:bg-white hover:text-black'
+            onClick={handleAction}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 ${
+              isJoined
+                ? 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                : isPrivate && isPending
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                : isPrivate
+                ? 'bg-amber-500 text-black hover:bg-amber-400 font-bold'
+                : 'bg-white/10 text-white hover:bg-white hover:text-black'
             }`}
           >
-            {joined ? 'Joined' : '+ Join'}
+            {isJoined ? (
+              'Joined ✓'
+            ) : isPrivate && isPending ? (
+              <>
+                <Clock size={11} /> Pending
+              </>
+            ) : isPrivate ? (
+              <>
+                <Lock size={11} /> Request
+              </>
+            ) : (
+              '+ Join'
+            )}
           </button>
         </div>
 

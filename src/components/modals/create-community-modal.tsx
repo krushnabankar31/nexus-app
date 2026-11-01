@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, Globe, Lock, Check } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -30,6 +30,7 @@ export function CreateCommunityModal() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('gaming');
   const [selectedEmoji, setSelectedEmoji] = useState('🎮');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isOpen = (useUiStore() as any).createCommunityModalOpen;
@@ -61,7 +62,10 @@ export function CreateCommunityModal() {
       onlineCount: 1,
       isVerified: false,
       isPartnered: false,
-      isPublic: true,
+      isFeatured: false,
+      isPublic: !isPrivate,
+      requiresApproval: isPrivate,
+      hasNSFW: false,
       inviteCode: `nexus-${Math.random().toString(36).substring(2, 7)}`,
       ownerId: user?.id || 'usr-current',
       createdAt: new Date().toISOString(),
@@ -71,10 +75,11 @@ export function CreateCommunityModal() {
       messageCount: 0,
     } as any;
 
-    await addCommunity(newCommunity);
+    await addCommunity(newCommunity, user || undefined);
     setIsSubmitting(false);
     setName('');
     setDescription('');
+    setIsPrivate(false);
     close();
     router.push(`/c/${newCommunity.id}`);
   };
@@ -176,6 +181,55 @@ export function CreateCommunityModal() {
               maxLength={120}
               className="w-full rounded-xl bg-[#111214] border border-white/10 px-4 py-2 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              Community Privacy
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsPrivate(false)}
+                className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                  !isPrivate
+                    ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-md ring-1 ring-indigo-500/50'
+                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-white">
+                    <Globe size={15} className={!isPrivate ? 'text-indigo-400' : 'text-slate-400'} />
+                    <span>Public</span>
+                  </div>
+                  {!isPrivate && <Check size={14} className="text-indigo-400" />}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-tight">
+                  Anyone can discover and join instantly. All joined members can view each other.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPrivate(true)}
+                className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                  isPrivate
+                    ? 'bg-amber-500/15 border-amber-500 text-white shadow-md ring-1 ring-amber-500/50'
+                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/8'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-white">
+                    <Lock size={15} className={isPrivate ? 'text-amber-400' : 'text-slate-400'} />
+                    <span>Private</span>
+                  </div>
+                  {isPrivate && <Check size={14} className="text-amber-400" />}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-tight">
+                  Requires owner approval. Non-members cannot see internal content or member list.
+                </p>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
