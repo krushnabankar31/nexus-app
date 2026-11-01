@@ -94,25 +94,44 @@ export function CallManager() {
     (node: HTMLVideoElement | null) => {
       remoteVideoRef.current = node;
       if (node && remoteStream) {
-        node.srcObject = remoteStream;
-        node.play().catch(() => {});
+        if (node.srcObject !== remoteStream) {
+          node.srcObject = remoteStream;
+        }
+        // Force muted on video element to bypass Chrome autoplay block
+        // (audio is output through <audio ref={remoteAudioRef} />)
+        node.muted = true;
+        const p = node.play();
+        if (p !== undefined) {
+          p.catch(() => {});
+        }
       }
     },
     [remoteStream]
   );
 
-  // Synchronize stream changes to video elements
+  // Synchronize local stream changes
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch(() => {});
+    const localEl = localVideoRef.current;
+    if (localEl && localStream) {
+      if (localEl.srcObject !== localStream) {
+        localEl.srcObject = localStream;
+      }
+      localEl.muted = true;
+      const p = localEl.play();
+      if (p !== undefined) p.catch(() => {});
     }
   }, [localStream, callStatus]);
 
+  // Synchronize remote stream changes
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch(() => {});
+    const remoteEl = remoteVideoRef.current;
+    if (remoteEl && remoteStream) {
+      if (remoteEl.srcObject !== remoteStream) {
+        remoteEl.srcObject = remoteStream;
+      }
+      remoteEl.muted = true;
+      const p = remoteEl.play();
+      if (p !== undefined) p.catch(() => {});
     }
   }, [remoteStream, callStatus]);
 
@@ -290,18 +309,25 @@ export function CallManager() {
                     <video
                       ref={setRemoteVideo}
                       autoPlay
+                      muted
                       playsInline
                       className="w-full h-full object-cover"
+                      onLoadedMetadata={(e) => {
+                        const vid = e.currentTarget;
+                        vid.muted = true;
+                        const p = vid.play();
+                        if (p !== undefined) p.catch(() => {});
+                      }}
                     />
 
-                    {/* Fallback if remote video track is not active yet */}
-                    {!remoteStream || remoteStream.getVideoTracks().length === 0 ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-center p-6">
+                    {/* Fallback if remote video track is not active or awaiting frames */}
+                    {!remoteStream || remoteStream.getVideoTracks().length === 0 || !remoteStream.getVideoTracks().some(t => t.enabled) ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-center p-6 z-10">
                         <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-3xl font-bold text-white mb-3 shadow-2xl">
                           {getInitials(otherName)}
                         </div>
                         <h4 className="text-base font-bold text-white mb-1">{otherName}</h4>
-                        <p className="text-xs text-slate-400">Audio connected · Camera initializing...</p>
+                        <p className="text-xs text-slate-400 animate-pulse">Connected · Receiving camera feed...</p>
                       </div>
                     ) : null}
 

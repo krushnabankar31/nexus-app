@@ -39,7 +39,23 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelay',
+      credential: 'openrelay',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelay',
+      credential: 'openrelay',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelay',
+      credential: 'openrelay',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 interface CallState {
@@ -196,7 +212,15 @@ export const useCallStore = create<CallState>()((set, get) => ({
       let stream: MediaStream;
       try {
         if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          } catch (highResErr) {
+            console.warn('HD video constraints failed, trying basic video:', highResErr);
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: type === 'video',
+              audio: true,
+            });
+          }
         } else {
           stream = new MediaStream();
         }
@@ -225,16 +249,25 @@ export const useCallStore = create<CallState>()((set, get) => ({
         pc.addTrack(track, stream);
       });
 
-      // Handle remote tracks robustly
+      // Handle remote tracks robustly (always create fresh MediaStream instance to trigger React re-renders)
       pc.ontrack = (event) => {
-        console.log('Received remote track:', event.track.kind);
-        if (event.streams && event.streams[0]) {
-          set({ remoteStream: event.streams[0] });
+        console.log('Caller received remote track:', event.track.kind, event.track.id);
+        const incomingStream = event.streams && event.streams[0] ? event.streams[0] : null;
+        const newStream = new MediaStream();
+        if (incomingStream) {
+          incomingStream.getTracks().forEach((track) => newStream.addTrack(track));
         } else {
-          const currentRemote = get().remoteStream || new MediaStream();
-          currentRemote.addTrack(event.track);
-          set({ remoteStream: currentRemote });
+          const current = get().remoteStream;
+          if (current) {
+            current.getTracks().forEach((t) => newStream.addTrack(t));
+          }
+          newStream.addTrack(event.track);
         }
+        set({ remoteStream: newStream });
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('Caller ICE state:', pc.iceConnectionState);
       };
 
       // 3. ICE Candidate Queue for handling early arrival
@@ -362,7 +395,15 @@ export const useCallStore = create<CallState>()((set, get) => ({
       let stream: MediaStream;
       try {
         if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          } catch (highResErr) {
+            console.warn('Recipient HD video constraints failed, trying basic video:', highResErr);
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: incoming.type === 'video',
+              audio: true,
+            });
+          }
         } else {
           stream = new MediaStream();
         }
@@ -391,16 +432,25 @@ export const useCallStore = create<CallState>()((set, get) => ({
         pc.addTrack(track, stream);
       });
 
-      // Handle remote tracks
+      // Handle remote tracks (always create fresh MediaStream instance to trigger React re-renders)
       pc.ontrack = (event) => {
-        console.log('Recipient received remote track:', event.track.kind);
-        if (event.streams && event.streams[0]) {
-          set({ remoteStream: event.streams[0] });
+        console.log('Recipient received remote track:', event.track.kind, event.track.id);
+        const incomingStream = event.streams && event.streams[0] ? event.streams[0] : null;
+        const newStream = new MediaStream();
+        if (incomingStream) {
+          incomingStream.getTracks().forEach((track) => newStream.addTrack(track));
         } else {
-          const currentRemote = get().remoteStream || new MediaStream();
-          currentRemote.addTrack(event.track);
-          set({ remoteStream: currentRemote });
+          const current = get().remoteStream;
+          if (current) {
+            current.getTracks().forEach((t) => newStream.addTrack(t));
+          }
+          newStream.addTrack(event.track);
         }
+        set({ remoteStream: newStream });
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('Recipient ICE state:', pc.iceConnectionState);
       };
 
       // 3. ICE candidate handling
