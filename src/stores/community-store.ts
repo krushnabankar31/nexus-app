@@ -179,43 +179,8 @@ export const useCommunityStore = create<CommunityState>()(
       },
 
       initMembersListener: () => {
-        if (!isFirebaseConfigured() || !db) {
-          return () => {};
-        }
-
-        try {
-          const usersCol = collection(db, 'users');
-          const unsubscribe = onSnapshot(usersCol, (snapshot) => {
-            const remoteUsers: User[] = [];
-            snapshot.forEach((docSnap) => {
-              const data = docSnap.data() as User;
-              if (data && docSnap.id) {
-                remoteUsers.push({ ...data, id: docSnap.id });
-              }
-            });
-
-            const activeId = get().activeCommunity?.id || 'main';
-            const realMembers: CommunityMember[] = remoteUsers.map((user, idx) => ({
-              userId: user.id,
-              communityId: activeId,
-              nickname: null,
-              roles: [
-                idx === 0
-                  ? { id: 'role-admin', communityId: activeId, name: 'Admin', color: '#ef4444', icon: null, position: 100, isDefault: false, isMentionable: true, isHoisted: true, permissions: ['administrator' as const] }
-                  : { id: 'role-member', communityId: activeId, name: 'Member', color: '#6b7280', icon: null, position: 1, isDefault: true, isMentionable: false, isHoisted: false, permissions: ['send_messages' as const] }
-              ],
-              joinedAt: user.createdAt || new Date().toISOString(),
-              user,
-            }));
-
-            set({ members: realMembers });
-          });
-
-          return unsubscribe;
-        } catch (err) {
-          console.warn('Members listener error:', err);
-          return () => {};
-        }
+        // Members are now strictly managed through private connections and community members
+        return () => {};
       },
 
       setCommunities: (communities) => set({ communities }),

@@ -1,0 +1,661 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Models & Schema Contracts
+// ===============================================================
+//
+// 1. Collection: /users/{userId}
+//    Document ID: Firebase Auth UID
+//    Fields:
+//      - uid: string (required, 1-128 chars, matches path userId)
+//      - displayName: string (required, 1-100 chars)
+//      - photoURL: string (optional, 1-2048 chars, valid http/https URL)
+//      - avatarUrl: string (optional, 1-2048 chars, valid http/https URL)
+//      - bio: string (optional, 0-500 chars)
+//      - username: string (optional, 1-30 chars)
+//      - createdAt: timestamp (required, recent on create, immutable)
+//      - updatedAt: timestamp (required, recent on update)
+//    Subcollection: /users/{userId}/private/{docId}
+//      - Private PII, user settings, sensitive credentials (owner-only access)
+//
+// 2. Collection: /following/{userId}/userConnections/{targetUserId}
+//    (and /users/{userId}/following/{targetUserId})
+//    Document ID: Target User UID
+//    Fields:
+//      - userId: string (required, matches path userId and request.auth.uid)
+//      - targetUserId: string (required, matches path targetUserId, != userId)
+//      - status: string (required, enum: 'active' | 'pending' | 'blocked')
+//      - createdAt: timestamp (required, recent on create, immutable)
+//      - updatedAt: timestamp (optional, recent if present)
+//
+// 3. Collection: /connections/{connectionId} (Top-level social edge pattern)
+//    Document ID: connectionId (e.g. {userId}_{targetUserId} or UUID)
+//    Fields:
+//      - sourceUserId: string (required, matches request.auth.uid, immutable)
+//      - targetUserId: string (required, != sourceUserId, immutable)
+//      - status: string (required, enum: 'active' | 'pending' | 'blocked')
+//      - createdAt: timestamp (required, recent on create, immutable)
+//      - updatedAt: timestamp (optional, recent if present)
+//
+// 4. Collection: /conversations/{conversationId}
+//    Document ID: conversationId (e.g. sorted composite UID or UUID)
+//    Fields:
+//      - participants: list of strings (required, exactly 2 distinct UIDs, immutable)
+//      - createdAt: timestamp (required, recent on create, immutable)
+//      - updatedAt: timestamp (required, recent)
+//      - lastMessage: map (optional, keys: text, senderId, timestamp, readStatus)
+//
+// 5. Subcollection: /conversations/{conversationId}/messages/{messageId}
+//    Document ID: messageId
+//    Fields:
+//      - senderId: string (required, matches request.auth.uid, immutable)
+//      - receiverId: string (required, must be the other participant, immutable)
+//      - text: string (required, 0-2000 chars)
+//      - timestamp: timestamp (required, recent on create, immutable)
+//      - readStatus: bool (required, can only be updated by receiver/participants)
+//      - readAt: timestamp (optional, recent if set)
+//      - isDeleted: bool (optional, soft-delete flag)
+//
+// 6. Collection: /communities/{communityId}
+//    Document ID: communityId
+//    Fields:
+//      - name: string (required, 1-100 chars)
+//      - description: string (required, 0-2000 chars)
+//      - ownerId: string (required, matches creator UID, immutable)
+//      - createdAt: timestamp (required, recent on create, immutable)
+//      - updatedAt: timestamp (optional, recent)
+//      - memberCount: int (required, >= 1, <= 1000000)
+//      - isPrivate: bool (required)
+//      - avatarUrl: string (optional, 1-2048 chars, valid URL)
+//      - accentColor: string (optional, 1-50 chars)
+//
+// 7. Subcollection: /communities/{communityId}/members/{memberId}
+//    Document ID: memberId (matches member UID)
+//    Fields:
+//      - userId: string (required, matches memberId, immutable)
+//      - role: string (required, enum: 'admin' | 'moderator' | 'member')
+//      - joinedAt: timestamp (required, recent on create, immutable)
+//
+// 8. Collection: /userMemberships/{userId}/communities/{communityId}
+//    (Reverse membership index for fast mutual/user community queries)
+//    Fields:
+//      - communityId: string (required, matches path communityId, immutable)
+//      - userId: string (required, matches path userId, immutable)
+//      - role: string (required, enum: 'admin' | 'moderator' | 'member')
+//      - isPrivate: bool (required)
+//      - joinedAt: timestamp (required, recent on create, immutable)
+//      - communityName: string (optional, 1-100 chars)
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Global Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Check if current user owns the resource / matches given userId
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate UID format and bounds (DoS and schema pollution prevention)
+    function isValidUid(uid) {
+      return uid is string && uid.size() >= 1 && uid.size() <= 128;
+    }
+
+    // Validate string size bounds
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // Validate optional string field
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    // Validate optional web URL (http or https)
+    function isValidOptionalUrl(field) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() <= 2048 &&
+         (request.resource.data[field].matches('^https://.*') ||
+          request.resource.data[field].matches('^http://.*')));
+    }
+
+    // Validate required fields exist in request payload
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that no arbitrary or unexpected fields are present
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that immutable fields remain strictly unchanged on update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate that a timestamp is within a 5-minute past and 1-minute future skew window
+    function isRecent(time) {
+      return time is timestamp &&
+        time > request.time - duration.value(5, 'm') &&
+        time <= request.time + duration.value(1, 'm');
+    }
+
+    // ===============================================================
+    // Domain Validator: Users Collection
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'avatarUrl', 'bio', 'username', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+        isValidUid(data.uid) &&
+        isValidString(data.displayName, 1, 100) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        isValidOptionalUrl('photoURL') &&
+        isValidOptionalUrl('avatarUrl') &&
+        isValidOptionalString('bio', 0, 500) &&
+        isValidOptionalString('username', 1, 30);
+    }
+
+    // ===============================================================
+    // Domain Validator: Social Connections / Follows
+    // ===============================================================
+
+    function isValidConnection(data) {
+      return hasOnlyAllowedFields(['userId', 'targetUserId', 'status', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['userId', 'targetUserId', 'status', 'createdAt']) &&
+        isValidUid(data.userId) &&
+        isValidUid(data.targetUserId) &&
+        data.userId != data.targetUserId &&
+        data.status in ['active', 'pending', 'blocked'] &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidTopConnection(data) {
+      return hasOnlyAllowedFields(['sourceUserId', 'targetUserId', 'status', 'createdAt', 'updatedAt']) &&
+        hasRequiredFields(['sourceUserId', 'targetUserId', 'status', 'createdAt']) &&
+        isValidUid(data.sourceUserId) &&
+        isValidUid(data.targetUserId) &&
+        data.sourceUserId != data.targetUserId &&
+        data.status in ['active', 'pending', 'blocked'] &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // ===============================================================
+    // Domain Validator: Direct Messaging (Conversations & Messages)
+    // ===============================================================
+
+    function isValidParticipantsList(participants) {
+      return participants is list &&
+        participants.size() == 2 &&
+        participants[0] is string && isValidUid(participants[0]) &&
+        participants[1] is string && isValidUid(participants[1]) &&
+        participants[0] != participants[1];
+    }
+
+    function isValidLastMessage(lastMsg, participants) {
+      return lastMsg is map &&
+        lastMsg.keys().hasOnly(['text', 'senderId', 'timestamp', 'readStatus']) &&
+        lastMsg.keys().hasAll(['text', 'senderId', 'timestamp', 'readStatus']) &&
+        isValidString(lastMsg.text, 0, 2000) &&
+        lastMsg.senderId is string &&
+        lastMsg.senderId in participants &&
+        lastMsg.timestamp is timestamp &&
+        lastMsg.readStatus is bool;
+    }
+
+    function isValidOptionalLastMessage(data) {
+      return !('lastMessage' in data) || isValidLastMessage(data.lastMessage, data.participants);
+    }
+
+    function isValidConversation(data) {
+      return hasOnlyAllowedFields(['participants', 'createdAt', 'updatedAt', 'lastMessage']) &&
+        hasRequiredFields(['participants', 'createdAt', 'updatedAt']) &&
+        isValidParticipantsList(data.participants) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        isValidOptionalLastMessage(data);
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['senderId', 'receiverId', 'text', 'timestamp', 'readStatus', 'readAt', 'isDeleted']) &&
+        hasRequiredFields(['senderId', 'receiverId', 'text', 'timestamp', 'readStatus']) &&
+        isValidUid(data.senderId) &&
+        isValidUid(data.receiverId) &&
+        data.senderId != data.receiverId &&
+        isValidString(data.text, 0, 2000) &&
+        data.timestamp is timestamp &&
+        data.readStatus is bool &&
+        (!('readAt' in data) || data.readAt is timestamp) &&
+        (!('isDeleted' in data) || data.isDeleted is bool);
+    }
+
+    function getConversation(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId));
+    }
+
+    function existsConversation(conversationId) {
+      return exists(/databases/$(database)/documents/conversations/$(conversationId));
+    }
+
+    // ===============================================================
+    // Domain Validator: Communities & Memberships
+    // ===============================================================
+
+    function isValidCommunity(data) {
+      return hasOnlyAllowedFields(['name', 'description', 'ownerId', 'createdAt', 'updatedAt', 'memberCount', 'isPrivate', 'avatarUrl', 'accentColor']) &&
+        hasRequiredFields(['name', 'description', 'ownerId', 'createdAt', 'memberCount', 'isPrivate']) &&
+        isValidString(data.name, 1, 100) &&
+        isValidString(data.description, 0, 2000) &&
+        isValidUid(data.ownerId) &&
+        data.createdAt is timestamp &&
+        data.memberCount is int &&
+        data.memberCount >= 1 &&
+        data.memberCount <= 1000000 &&
+        data.isPrivate is bool &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+        isValidOptionalUrl('avatarUrl') &&
+        isValidOptionalString('accentColor', 1, 50);
+    }
+
+    function isValidMember(data) {
+      return hasOnlyAllowedFields(['userId', 'role', 'joinedAt']) &&
+        hasRequiredFields(['userId', 'role', 'joinedAt']) &&
+        isValidUid(data.userId) &&
+        data.role in ['admin', 'moderator', 'member'] &&
+        data.joinedAt is timestamp;
+    }
+
+    function isValidUserMembership(data) {
+      return hasOnlyAllowedFields(['communityId', 'userId', 'role', 'isPrivate', 'joinedAt', 'communityName']) &&
+        hasRequiredFields(['communityId', 'userId', 'role', 'isPrivate', 'joinedAt']) &&
+        isValidUid(data.communityId) &&
+        isValidUid(data.userId) &&
+        data.role in ['admin', 'moderator', 'member'] &&
+        data.isPrivate is bool &&
+        data.joinedAt is timestamp &&
+        isValidOptionalString('communityName', 1, 100);
+    }
+
+    function getCommunity(communityId) {
+      return get(/databases/$(database)/documents/communities/$(communityId));
+    }
+
+    function existsCommunity(communityId) {
+      return exists(/databases/$(database)/documents/communities/$(communityId));
+    }
+
+    function isCommunityOwner(communityId) {
+      return isAuthenticated() &&
+        existsCommunity(communityId) &&
+        getCommunity(communityId).data.ownerId == request.auth.uid;
+    }
+
+    function isCommunityPublic(communityId) {
+      return existsCommunity(communityId) &&
+        getCommunity(communityId).data.isPrivate == false;
+    }
+
+    function getCommunityMember(communityId, userId) {
+      return get(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
+    }
+
+    function isCommunityMember(communityId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/communities/$(communityId)/members/$(request.auth.uid));
+    }
+
+    function isCommunityAdmin(communityId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/communities/$(communityId)/members/$(request.auth.uid)) &&
+        getCommunityMember(communityId, request.auth.uid).data.role == 'admin';
+    }
+
+    // Atomic member counter update validation (isolation and +/-1 integrity)
+    function isValidMemberCountUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'updatedAt']) &&
+        request.resource.data.memberCount is int &&
+        math.abs(request.resource.data.memberCount - resource.data.memberCount) == 1 &&
+        request.resource.data.memberCount >= 1 &&
+        (!('updatedAt' in request.resource.data) || isRecent(request.resource.data.updatedAt));
+    }
+
+    // ===============================================================
+    // Root Rule: Default Deny All
+    // ===============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // 1. Users Collection
+    // ===============================================================
+
+    match /users/{userId} {
+      // Public profiles readable by any authenticated user
+      allow read: if isAuthenticated();
+
+      // Creation restricted to the verified owner with strict schema
+      allow create: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        isValidUser(request.resource.data) &&
+        isRecent(request.resource.data.createdAt);
+
+      // Updates restricted to the owner with immutable fields locked down
+      allow update: if isOwner(userId) &&
+        isValidUser(request.resource.data) &&
+        areImmutableFieldsUnchanged(['uid', 'createdAt']) &&
+        isRecent(request.resource.data.updatedAt);
+
+      // Deletion restricted to user themselves
+      allow delete: if isOwner(userId);
+
+      // Nested subcollection for social following edges
+      match /following/{targetUserId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isOwner(userId) &&
+          targetUserId != userId &&
+          request.resource.data.userId == userId &&
+          request.resource.data.targetUserId == targetUserId &&
+          isValidConnection(request.resource.data) &&
+          isRecent(request.resource.data.createdAt);
+
+        allow update: if isOwner(userId) &&
+          isValidConnection(request.resource.data) &&
+          areImmutableFieldsUnchanged(['userId', 'targetUserId', 'createdAt']) &&
+          (!('updatedAt' in request.resource.data) || isRecent(request.resource.data.updatedAt));
+
+        allow delete: if isOwner(userId);
+      }
+
+      // Private user subcollection for PII, tokens, and private preferences
+      match /private/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ===============================================================
+    // 2. Social Graph Extension (Follows / Friendships / Connections)
+    // ===============================================================
+
+    // Path pattern: /following/{userId}/userConnections/{targetUserId}
+    match /following/{userId}/userConnections/{targetUserId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isOwner(userId) &&
+        targetUserId != userId &&
+        request.resource.data.userId == userId &&
+        request.resource.data.targetUserId == targetUserId &&
+        isValidConnection(request.resource.data) &&
+        isRecent(request.resource.data.createdAt);
+
+      allow update: if isOwner(userId) &&
+        isValidConnection(request.resource.data) &&
+        areImmutableFieldsUnchanged(['userId', 'targetUserId', 'createdAt']) &&
+        (!('updatedAt' in request.resource.data) || isRecent(request.resource.data.updatedAt));
+
+      allow delete: if isOwner(userId);
+    }
+
+    // Dedicated top-level connection pattern: /connections/{connectionId}
+    match /connections/{connectionId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.sourceUserId == request.auth.uid &&
+        request.resource.data.targetUserId != request.auth.uid &&
+        isValidTopConnection(request.resource.data) &&
+        isRecent(request.resource.data.createdAt);
+
+      allow update: if isAuthenticated() &&
+        resource.data.sourceUserId == request.auth.uid &&
+        isValidTopConnection(request.resource.data) &&
+        areImmutableFieldsUnchanged(['sourceUserId', 'targetUserId', 'createdAt']) &&
+        (!('updatedAt' in request.resource.data) || isRecent(request.resource.data.updatedAt));
+
+      allow delete: if isAuthenticated() && resource.data.sourceUserId == request.auth.uid;
+    }
+
+    // Two-way accepted connections subcollection: /connections/{userId}/accepted/{connectedUserId}
+    match /connections/{userId}/accepted/{connectedUserId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || request.auth.uid == connectedUserId);
+      allow create, update, delete: if isAuthenticated() && (request.auth.uid == userId || request.auth.uid == connectedUserId);
+    }
+
+    // Connection Requests: /connection_requests/{requestId}
+    match /connection_requests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        resource.data.sender_id == request.auth.uid ||
+        resource.data.receiver_id == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.sender_id == request.auth.uid &&
+        request.resource.data.receiver_id != request.auth.uid &&
+        request.resource.data.status == 'pending';
+
+      allow update: if isAuthenticated() && (
+        resource.data.sender_id == request.auth.uid ||
+        resource.data.receiver_id == request.auth.uid
+      );
+
+      allow delete: if isAuthenticated() && (
+        resource.data.sender_id == request.auth.uid ||
+        resource.data.receiver_id == request.auth.uid
+      );
+    }
+
+    // ===============================================================
+    // 3. Messaging Extension (Direct Messages)
+    // ===============================================================
+
+    match /conversations/{conversationId} {
+      // Only authenticated participants can read or query their conversations
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+
+      // Creator must be one of the participants
+      allow create: if isAuthenticated() &&
+        request.auth.uid in request.resource.data.participants &&
+        isValidConversation(request.resource.data) &&
+        isRecent(request.resource.data.createdAt);
+
+      // Participants can update metadata (e.g. updatedAt, lastMessage) with participants immutable
+      allow update: if isAuthenticated() &&
+        request.auth.uid in resource.data.participants &&
+        isValidConversation(request.resource.data) &&
+        areImmutableFieldsUnchanged(['participants', 'createdAt']) &&
+        isRecent(request.resource.data.updatedAt);
+
+      // Hard deletion of conversation threads disabled to prevent unilateral destruction of history
+      allow delete: if false;
+
+      // Subcollection: /conversations/{conversationId}/messages/{messageId}
+      match /messages/{messageId} {
+        // Only verified participants of the parent conversation can read messages
+        allow read: if isAuthenticated() &&
+          existsConversation(conversationId) &&
+          request.auth.uid in getConversation(conversationId).data.participants;
+
+        // Sender must be authenticated, be a participant, and match senderId
+        allow create: if isAuthenticated() &&
+          existsConversation(conversationId) &&
+          request.auth.uid in getConversation(conversationId).data.participants &&
+          request.resource.data.receiverId in getConversation(conversationId).data.participants &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.receiverId != request.auth.uid &&
+          isValidMessage(request.resource.data) &&
+          isRecent(request.resource.data.timestamp);
+
+        // Participants can only update readStatus (receiver) or perform soft-delete (sender)
+        allow update: if isAuthenticated() &&
+          existsConversation(conversationId) &&
+          request.auth.uid in getConversation(conversationId).data.participants &&
+          (
+            // Receiver marks message as read
+            (
+              request.auth.uid == resource.data.receiverId &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStatus', 'readAt']) &&
+              request.resource.data.readStatus is bool &&
+              (!('readAt' in request.resource.data) || isRecent(request.resource.data.readAt))
+            ) ||
+            // Sender soft-deletes their message
+            (
+              request.auth.uid == resource.data.senderId &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted', 'text']) &&
+              request.resource.data.isDeleted == true &&
+              isValidString(request.resource.data.text, 0, 2000)
+            )
+          );
+
+        // No hard message deletions allowed
+        allow delete: if false;
+      }
+    }
+
+    // ===============================================================
+    // 4. Shared Communities Extension (Groups / Spaces)
+    // ===============================================================
+
+    match /communities/{communityId} {
+      // Public communities readable by any authenticated user; private communities only by members/owner
+      allow read: if isAuthenticated() && (
+        resource.data.isPrivate == false ||
+        resource.data.ownerId == request.auth.uid ||
+        isCommunityMember(communityId)
+      );
+
+      // Any authenticated user can create a community with ownerId set to their UID
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.memberCount == 1 &&
+        isValidCommunity(request.resource.data) &&
+        isRecent(request.resource.data.createdAt);
+
+      // Updates: either owner updating metadata (immutable ownerId/createdAt) or atomic memberCount updates
+      allow update: if isAuthenticated() && (
+        (
+          isOwner(resource.data.ownerId) &&
+          isValidCommunity(request.resource.data) &&
+          areImmutableFieldsUnchanged(['ownerId', 'createdAt']) &&
+          (!('updatedAt' in request.resource.data) || isRecent(request.resource.data.updatedAt))
+        ) ||
+        isValidMemberCountUpdate()
+      );
+
+      // Only the community owner can delete the community
+      allow delete: if isOwner(resource.data.ownerId);
+
+      // Subcollection: /communities/{communityId}/members/{memberId}
+      match /members/{memberId} {
+        // Members readable if community is public, or if requester is a member/owner
+        allow read: if isAuthenticated() && (
+          request.auth.uid == memberId ||
+          isCommunityPublic(communityId) ||
+          isCommunityMember(communityId) ||
+          isCommunityOwner(communityId)
+        );
+
+        // Join / add member:
+        // - Self-join: only allowed on public communities with role 'member'
+        // - Community owner or admin: can add member with role admin/moderator/member
+        allow create: if isAuthenticated() &&
+          existsCommunity(communityId) &&
+          request.resource.data.userId == memberId &&
+          isValidMember(request.resource.data) &&
+          isRecent(request.resource.data.joinedAt) &&
+          (
+            (isOwner(memberId) && request.resource.data.role == 'member' && isCommunityPublic(communityId)) ||
+            isCommunityOwner(communityId) ||
+            isCommunityAdmin(communityId)
+          );
+
+        // Update role: only owner or admin can update roles; members cannot modify their own role
+        allow update: if isAuthenticated() &&
+          existsCommunity(communityId) &&
+          isValidMember(request.resource.data) &&
+          areImmutableFieldsUnchanged(['userId', 'joinedAt']) &&
+          (
+            isCommunityOwner(communityId) ||
+            (
+              isCommunityAdmin(communityId) &&
+              request.auth.uid != memberId &&
+              resource.data.userId != getCommunity(communityId).data.ownerId &&
+              request.resource.data.role != 'admin'
+            )
+          );
+
+        // Delete / Leave:
+        // - Member can leave their own membership (unless they are the owner)
+        // - Owner can remove any member
+        // - Admin can remove members/moderators (cannot remove owner or other admins)
+        allow delete: if isAuthenticated() &&
+          existsCommunity(communityId) &&
+          (
+            (isOwner(memberId) && request.auth.uid != getCommunity(communityId).data.ownerId) ||
+            isCommunityOwner(communityId) ||
+            (
+              isCommunityAdmin(communityId) &&
+              resource.data.userId != getCommunity(communityId).data.ownerId &&
+              resource.data.role != 'admin'
+            )
+          );
+      }
+    }
+
+    // ===============================================================
+    // 5. User Reverse Membership Index
+    // ===============================================================
+
+    // Path pattern: /userMemberships/{userId}/communities/{communityId}
+    match /userMemberships/{userId}/communities/{communityId} {
+      // User can read all their memberships; others can read public community memberships
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || resource.data.isPrivate == false
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == userId &&
+        request.resource.data.communityId == communityId &&
+        isValidUserMembership(request.resource.data) &&
+        isRecent(request.resource.data.joinedAt) &&
+        (
+          isOwner(userId) ||
+          isCommunityOwner(communityId) ||
+          isCommunityAdmin(communityId)
+        );
+
+      allow update: if isAuthenticated() &&
+        isValidUserMembership(request.resource.data) &&
+        areImmutableFieldsUnchanged(['userId', 'communityId', 'joinedAt']) &&
+        (
+          isOwner(userId) ||
+          isCommunityOwner(communityId) ||
+          isCommunityAdmin(communityId)
+        );
+
+      allow delete: if isAuthenticated() && (
+        isOwner(userId) ||
+        isCommunityOwner(communityId) ||
+        isCommunityAdmin(communityId)
+      );
+    }
+  }
+}

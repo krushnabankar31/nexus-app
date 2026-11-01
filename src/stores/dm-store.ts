@@ -4,6 +4,7 @@ import { db, isFirebaseConfigured } from '@/lib/firebase';
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -102,24 +103,42 @@ export const useDMStore = create<DMState>()((set, get) => ({
   isUsersLoading: false,
 
   fetchAllUsers: async (currentUserId?: string) => {
-    if (!isFirebaseConfigured() || !db) return [];
+    if (!isFirebaseConfigured() || !db || !currentUserId) return [];
 
     set({ isUsersLoading: true });
     try {
-      const usersCol = collection(db, 'users');
-      const snap = await getDocs(usersCol);
+      // Zero-Leak Privacy: Only fetch users that have accepted connections with currentUserId
+      const acceptedCol = collection(db, 'connections', currentUserId, 'accepted');
+      const snap = await getDocs(acceptedCol);
       const list: User[] = [];
-      snap.forEach((d) => {
-        const u = d.data() as User;
-        const id = d.id;
-        if (id && (!currentUserId || id !== currentUserId)) {
-          list.push({ ...u, id });
+
+      for (const d of snap.docs) {
+        const targetId = d.id;
+        const uSnap = await getDoc(doc(db, 'users', targetId));
+        if (uSnap.exists()) {
+          const u = uSnap.data() as User;
+          list.push({ ...u, id: targetId });
+        } else {
+          const dData = d.data();
+          list.push({
+            id: targetId,
+            displayName: dData.displayName || 'Connected Member',
+            username: dData.username || 'member',
+            avatar: dData.avatar || '',
+            status: dData.status || 'online',
+            email: '',
+            bio: 'Connected Member',
+            createdAt: dData.connectedAt || '',
+            badges: [],
+            links: [],
+          });
         }
-      });
+      }
+
       set({ allUsers: list, isUsersLoading: false });
       return list;
     } catch (err) {
-      console.warn('Failed to fetch all users for DM:', err);
+      console.warn('Failed to fetch accepted users for DM:', err);
       set({ isUsersLoading: false });
       return [];
     }

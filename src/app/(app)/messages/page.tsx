@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, Plus, Search, Users, X, Shield, ArrowRight } from 'lucide-react';
+import { MessageSquare, Plus, Search, Users, X, Shield, ArrowRight, UserPlus, Lock } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDMStore, getConversationId } from '@/stores/dm-store';
+import { useConnectionStore } from '@/stores/connection-store';
 import { cn, getInitials, formatTime, getUserEffectiveStatus } from '@/lib/utils';
 import type { User } from '@nexus/types';
 
@@ -222,8 +223,22 @@ export default function MessagesIndexPage() {
               {isUsersLoading ? (
                 <div className="py-8 text-center text-xs text-slate-500">Loading members...</div>
               ) : filteredUsers.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  {userSearch ? 'No members found matching that search.' : 'No other members found.'}
+                <div className="py-8 px-4 text-center">
+                  <Lock size={20} className="mx-auto text-brand-400 mb-2" />
+                  <p className="text-xs font-semibold text-white mb-1">No Connected Members</p>
+                  <p className="text-[11px] text-slate-400 mb-4 max-w-xs mx-auto">
+                    In Nexus, direct messaging requires a mutual connection. Discover users and send connection requests first.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowNewMessageModal(false);
+                      useConnectionStore.getState().setIsModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition-all cursor-pointer"
+                  >
+                    <UserPlus size={13} />
+                    <span>Find Members to Connect</span>
+                  </button>
                 </div>
               ) : (
                 filteredUsers.map((u) => {
@@ -258,7 +273,7 @@ export default function MessagesIndexPage() {
                             {u.isVerified && <Shield size={12} className="text-blue-400 shrink-0" />}
                           </div>
                           <span className="text-[11px] text-slate-400 truncate block">
-                            @{u.username || 'user'} {u.email ? `• ${u.email}` : ''}
+                            @{u.username || 'user'}
                           </span>
                         </div>
                       </div>
