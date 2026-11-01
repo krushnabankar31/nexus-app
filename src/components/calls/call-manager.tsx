@@ -27,6 +27,7 @@ export function CallManager() {
     incomingCall,
     callStatus,
     callRole,
+    connectionState,
     localStream,
     remoteStream,
     isMuted,
@@ -49,6 +50,12 @@ export function CallManager() {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRemoteVideoLive, setIsRemoteVideoLive] = useState(false);
+
+  // Reset video live state when call changes
+  useEffect(() => {
+    setIsRemoteVideoLive(false);
+  }, [currentCall?.id, callStatus]);
 
   // 1. Listen for incoming calls for currentUser
   useEffect(() => {
@@ -266,9 +273,24 @@ export function CallManager() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] font-semibold text-emerald-300 border border-white/10">
-                    HD WebRTC
-                  </span>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] font-semibold border border-white/10">
+                    {connectionState === 'connected' ? (
+                      <span className="flex items-center gap-1.5 text-emerald-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        HD WebRTC Live
+                      </span>
+                    ) : connectionState === 'failed' ? (
+                      <span className="flex items-center gap-1.5 text-red-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                        Connection Failed
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-amber-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                        Connecting WebRTC...
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => setIsFullscreen(!isFullscreen)}
                     className="p-2 rounded-xl bg-black/40 text-slate-300 hover:text-white hover:bg-black/60 transition-colors"
@@ -316,13 +338,17 @@ export function CallManager() {
                       autoPlay
                       muted
                       playsInline
-                      className="w-full h-full object-cover"
+                      className={cn(
+                        'w-full h-full object-cover transition-opacity duration-300',
+                        isRemoteVideoLive ? 'opacity-100' : 'opacity-0'
+                      )}
                       onLoadedMetadata={(e) => {
                         const vid = e.currentTarget;
                         vid.defaultMuted = true;
                         vid.muted = true;
                         const p = vid.play();
                         if (p !== undefined) p.catch(() => {});
+                        if (vid.videoWidth > 0 && vid.videoHeight > 0) setIsRemoteVideoLive(true);
                       }}
                       onCanPlay={(e) => {
                         const vid = e.currentTarget;
@@ -330,23 +356,48 @@ export function CallManager() {
                         vid.muted = true;
                         const p = vid.play();
                         if (p !== undefined) p.catch(() => {});
+                        if (vid.videoWidth > 0 && vid.videoHeight > 0) setIsRemoteVideoLive(true);
+                      }}
+                      onPlaying={() => setIsRemoteVideoLive(true)}
+                      onTimeUpdate={(e) => {
+                        if (e.currentTarget.currentTime > 0 && e.currentTarget.videoWidth > 0) {
+                          setIsRemoteVideoLive(true);
+                        }
                       }}
                     />
 
-                    {/* Fallback if remote video track is not active or awaiting frames */}
-                    {!remoteStream || remoteStream.getVideoTracks().length === 0 || !remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === 'live') ? (
+                    {/* Fallback while remote video frames are connecting / decoding */}
+                    {!isRemoteVideoLive && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-center p-6 z-10 pointer-events-none">
-                        <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-3xl font-bold text-white mb-3 shadow-2xl overflow-hidden">
+                        <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-3xl font-bold text-white mb-4 shadow-2xl overflow-hidden relative">
                           {otherAvatar ? (
                             <img src={otherAvatar} alt="" className="w-full h-full object-cover" />
                           ) : (
                             getInitials(otherName)
                           )}
+                          <span className="animate-ping absolute inset-0 rounded-full border-2 border-emerald-400 opacity-40 pointer-events-none" />
                         </div>
-                        <h4 className="text-base font-bold text-white mb-1">{otherName}</h4>
-                        <p className="text-xs text-slate-400 animate-pulse">Connected · Waiting for video stream...</p>
+                        <h4 className="text-base font-bold text-white mb-1.5">{otherName}</h4>
+                        <div className="text-xs text-slate-300 flex items-center justify-center gap-2 font-medium">
+                          {connectionState === 'connected' ? (
+                            <span className="flex items-center gap-1.5 text-emerald-300">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>Connected · Initializing camera frames...</span>
+                            </span>
+                          ) : connectionState === 'failed' ? (
+                            <span className="flex items-center gap-1.5 text-red-400">
+                              <span className="w-2 h-2 rounded-full bg-red-400" />
+                              <span>Connection Failed · Firewall or relay blocked</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-amber-300 animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                              <span>Establishing secure peer video channel...</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    ) : null}
+                    )}
 
                     {/* Local Camera Picture-in-Picture (PiP) Window in Bottom-Right */}
                     <div className="absolute bottom-20 right-4 md:bottom-22 md:right-6 w-32 h-24 md:w-48 md:h-36 rounded-2xl overflow-hidden border-2 border-white/20 bg-slate-900 shadow-2xl z-20 group">
