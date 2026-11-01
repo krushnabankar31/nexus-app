@@ -31,6 +31,34 @@ const COMMUNITY_RULES = [
   'Follow Nexus Community Guidelines at all times',
 ];
 
+const COMMUNITY_COVERS = [
+  'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=1200&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1200&auto=format&fit=crop&q=80',
+];
+
+function getCoverImage(community: { id: string; name?: string; banner?: string | null }) {
+  if (community.banner && !community.banner.includes('photo-1618005182384-a83a8bd57fbe')) {
+    return community.banner;
+  }
+  let hash = 0;
+  const seed = community.id || community.name || 'nexus';
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % COMMUNITY_COVERS.length;
+  return COMMUNITY_COVERS[idx];
+}
+
 export default function CommunityPage() {
   const params = useParams<{ communityId: string }>();
   const {
@@ -101,35 +129,28 @@ export default function CommunityPage() {
   return (
     <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
       {/* Banner */}
-      <div
-        className="relative h-56 w-full flex-shrink-0 overflow-hidden"
-        style={{
-          background: `linear-gradient(135deg, ${accentColor}33, ${accentColor}22, hsl(var(--bg-raised)))`,
-        }}
-      >
-        {(community as any).banner && (
-          <img
-            src={(community as any).banner}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover opacity-40"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[hsl(var(--bg-base))] opacity-80" />
+      <div className="relative h-60 w-full flex-shrink-0 overflow-hidden bg-[#0a0b16]">
+        <img
+          src={getCoverImage(community)}
+          alt={community.name}
+          className="absolute inset-0 h-full w-full object-cover opacity-60 filter brightness-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#07080e] via-[#07080e]/40 to-black/30" />
 
         {/* Top Badges */}
         <div className="absolute top-4 right-4 flex items-center gap-2">
           {isPrivateCommunity ? (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold backdrop-blur-md">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold backdrop-blur-xl">
               <Lock size={12} /> Private Community
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold backdrop-blur-md">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold backdrop-blur-xl">
               <Globe size={12} /> Public Community
             </span>
           )}
 
           {isOwner && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold backdrop-blur-md">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold backdrop-blur-xl">
               👑 Owner
             </span>
           )}
@@ -138,8 +159,8 @@ export default function CommunityPage() {
         {/* Community Identity in Banner */}
         <div className="absolute bottom-4 left-6 flex items-end gap-4">
           <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-lg ring-4 ring-[hsl(var(--bg-base))] overflow-hidden flex-shrink-0 text-3xl"
-            style={{ background: `${accentColor}55` }}
+            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl ring-4 ring-[#07080e] overflow-hidden flex-shrink-0 text-3xl bg-[#121324] border border-white/10"
+            style={{ background: `${accentColor}33` }}
           >
             {community.icon && community.icon.startsWith('http') ? (
               <img
@@ -153,18 +174,18 @@ export default function CommunityPage() {
           </div>
           <div className="pb-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white">{community.name}</h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight">{community.name}</h1>
               {community.isVerified && (
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500">
                   <Shield className="h-3 w-3 text-white" />
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-400">
+            <div className="flex items-center gap-3 text-sm text-slate-400 mt-0.5">
               <span>{memberCount.toLocaleString()} members</span>
               <span>·</span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-400" />
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
                 {onlineCount.toLocaleString()} online
               </span>
               {community.category && (
@@ -236,7 +257,7 @@ export default function CommunityPage() {
       {/* Private Community Gate for Non-Members */}
       {isPrivateCommunity && !isMember ? (
         <div className="p-6 max-w-2xl mx-auto my-8">
-          <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 via-[hsl(var(--bg-raised))] to-[hsl(var(--bg-base))] p-8 text-center space-y-4 shadow-2xl">
+          <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 via-[#0b0c16] to-[#07080e] p-8 text-center space-y-4 shadow-2xl">
             <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <Lock size={32} />
             </div>
@@ -282,12 +303,12 @@ export default function CommunityPage() {
           <div className="min-w-0 space-y-6">
             {/* Welcome Announcement */}
             <section>
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/8 p-5">
+              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 backdrop-blur-md">
                 <div className="flex items-center gap-2 mb-2 text-indigo-400 font-bold text-sm">
                   <Pin size={16} />
                   <span>Welcome to {community.name}!</span>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed">
+                <p className="text-sm text-slate-300 leading-relaxed">
                   {community.description ||
                     'Welcome to this community. Hang out, share updates, and chat with members.'}
                 </p>
@@ -297,9 +318,9 @@ export default function CommunityPage() {
             {/* Online Members Grid */}
             <section>
               <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
-                <span className="h-2 w-2 rounded-full bg-green-400" /> Joined
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" /> Joined
                 Members
-                <span className="ml-1 text-sm font-normal text-gray-400">
+                <span className="ml-1 text-sm font-normal text-slate-400">
                   ({safeMembers.length})
                 </span>
               </h2>
@@ -324,26 +345,26 @@ export default function CommunityPage() {
                   return (
                     <div
                       key={m.userId}
-                      className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-3 text-center"
+                      className="flex flex-col items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-3.5 text-center hover:border-indigo-500/30 transition-all"
                     >
                       <div className="relative">
                         {u.avatar ? (
                           <img
                             src={u.avatar}
                             alt=""
-                            className="h-10 w-10 rounded-full object-cover"
+                            className="h-10 w-10 rounded-full object-cover ring-2 ring-white/10"
                           />
                         ) : (
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white shadow-md">
                             {getInitials(name)}
                           </div>
                         )}
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${
                             effStatus === 'offline'
-                              ? 'bg-gray-500'
-                              : 'bg-green-400'
-                          } ring-2 ring-[hsl(var(--bg-raised))]`}
+                              ? 'bg-slate-500'
+                              : 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                          } ring-2 ring-[#0f101f]`}
                         />
                       </div>
                       <span className="text-xs font-medium text-white truncate w-full">
@@ -351,8 +372,8 @@ export default function CommunityPage() {
                       </span>
                       {role && (
                         <span
-                          className="text-[10px]"
-                          style={{ color: role.color ?? '#6b7280' }}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.05]"
+                          style={{ color: role.color ?? '#818cf8' }}
                         >
                           {role.name}
                         </span>
@@ -366,7 +387,7 @@ export default function CommunityPage() {
             {/* Channels */}
             <section>
               <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
-                <Hash className="h-4 w-4 text-gray-400" /> Channels
+                <Hash className="h-4 w-4 text-indigo-400" /> Channels
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {(quickChannels.length > 0
@@ -383,24 +404,24 @@ export default function CommunityPage() {
                   <Link
                     key={ch.id}
                     href={`/c/${community.id}/${ch.id}`}
-                    className="group flex items-center justify-between rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-4 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all"
+                    className="group flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all hover:-translate-y-0.5 shadow-sm"
                   >
                     <div className="flex items-center gap-3">
                       {ch.type === 'voice' ? (
-                        <Volume2 className="h-5 w-5 text-green-400" />
+                        <Volume2 className="h-5 w-5 text-emerald-400" />
                       ) : (
-                        <Hash className="h-5 w-5 text-gray-400 group-hover:text-indigo-400 transition-colors" />
+                        <Hash className="h-5 w-5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
                       )}
                       <div>
-                        <p className="font-medium text-sm text-white">
+                        <p className="font-medium text-sm text-white group-hover:text-indigo-200 transition-colors">
                           {ch.name}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-slate-400">
                           {ch.topic || 'Channel discussion'}
                         </p>
                       </div>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-gray-500 group-hover:text-indigo-400 transition-colors" />
+                    <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
                   </Link>
                 ))}
               </div>
@@ -409,16 +430,16 @@ export default function CommunityPage() {
 
           {/* Right sidebar */}
           <aside className="space-y-4">
-            <div className="rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
               <h3 className="mb-2 font-bold text-white text-sm">
                 About Community
               </h3>
-              <p className="text-xs text-gray-300 leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed">
                 {community.description || 'Welcome to this community.'}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
               <h3 className="mb-3 font-bold text-white text-sm">Stats</h3>
               <div className="space-y-2.5">
                 {[
@@ -440,23 +461,31 @@ export default function CommunityPage() {
                     key={label}
                     className="flex items-center justify-between text-xs"
                   >
-                    <span className="text-gray-400">{label}</span>
+                    <span className="text-slate-400">{label}</span>
                     <span className="font-semibold text-white">{val}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-[hsl(var(--bg-raised))] p-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
               <h3 className="mb-3 flex items-center gap-2 font-bold text-white text-sm">
                 <BookOpen className="h-4 w-4 text-indigo-400" /> Community Rules
               </h3>
               <ol className="space-y-2">
                 {COMMUNITY_RULES.map((rule, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs text-gray-300">
+                  <li key={i} className="flex gap-2.5 text-xs text-slate-300">
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-400">
                       {i + 1}
                     </span>
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </aside>
+        </div>
+      )}
                     <span>{rule}</span>
                   </li>
                 ))}

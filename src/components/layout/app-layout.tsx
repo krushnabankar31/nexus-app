@@ -60,7 +60,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [mobileDrawerOpen, closeMobileDrawer]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-surface-900 text-slate-100">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#07080e] text-slate-100">
       {/* ── Skip to content (a11y) ─────────────────────────────────────────── */}
       <a
         href="#main-content"
@@ -89,7 +89,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Content Area — flex-1 */}
         <main
           id="main-content"
-          className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-[#1e1f22]"
+          className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-[#07080e]"
           tabIndex={-1}
         >
           {children}
@@ -117,7 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Main content */}
         <main
           id="main-content"
-          className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#1e1f22]"
+          className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#07080e]"
           tabIndex={-1}
         >
           {children}

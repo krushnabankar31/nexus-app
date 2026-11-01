@@ -4,17 +4,34 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronDown, ChevronRight,
-  Hash, Megaphone, Volume2, Video, BookMarked,
-  Lock, Settings, Mic, MicOff, Headphones, VolumeX,
-  Plus, Users, Search, Trash2, Link as LinkIcon, LogOut, ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  Hash,
+  Megaphone,
+  Volume2,
+  Video,
+  BookMarked,
+  Lock,
+  Settings,
+  Mic,
+  MicOff,
+  Headphones,
+  VolumeX,
+  Plus,
+  Users,
+  Search,
+  Trash2,
+  Link as LinkIcon,
+  LogOut,
+  ShieldCheck,
+  Compass,
+  Sparkles,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore, getDefaultCategories, canDeleteCommunity } from '@/stores/community-store';
 import { useDMStore } from '@/stores/dm-store';
 import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
-
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ChannelType = 'text' | 'voice' | 'announcement' | 'forum' | 'video' | 'stage';
@@ -30,16 +47,12 @@ interface Channel {
 
 // ─── Icon map ─────────────────────────────────────────────────────────────────
 const ICONS: Record<string, React.ReactNode> = {
-  text: <Hash size={16} className="flex-shrink-0" />,
-  announcement: <Megaphone size={16} className="flex-shrink-0" />,
-  voice: <Volume2 size={16} className="flex-shrink-0" />,
-  video: <Video size={16} className="flex-shrink-0" />,
-  forum: <BookMarked size={16} className="flex-shrink-0" />,
-  stage: <Users size={16} className="flex-shrink-0" />,
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  online: '#22c55e', idle: '#f59e0b', dnd: '#ef4444', offline: '#6b7280',
+  text: <Hash size={15} className="flex-shrink-0" />,
+  announcement: <Megaphone size={15} className="flex-shrink-0" />,
+  voice: <Volume2 size={15} className="flex-shrink-0" />,
+  video: <Video size={15} className="flex-shrink-0" />,
+  forum: <BookMarked size={15} className="flex-shrink-0" />,
+  stage: <Users size={15} className="flex-shrink-0" />,
 };
 
 // ─── Channel Item ─────────────────────────────────────────────────────────────
@@ -60,44 +73,37 @@ function ChannelItem({
   const hasUnread = (channel.unreadCount ?? 0) > 0;
 
   return (
-    <motion.button
+    <button
       data-channel-id={channel.id}
       onClick={() => router.push(href)}
-      whileHover={{ x: 1 }}
-      transition={{ duration: 0.1 }}
       aria-current={isActive ? 'page' : undefined}
-      className={`
-        group relative w-full flex items-center gap-1.5 px-2 py-[5px] rounded-md
-        text-sm transition-colors duration-100 outline-none
-        focus-visible:ring-2 focus-visible:ring-brand-500
-        ${isActive
-          ? 'bg-brand-500/20 text-white'
+      className={`group relative w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 outline-none cursor-pointer ${
+        isActive
+          ? 'bg-gradient-to-r from-indigo-500/20 to-violet-500/10 text-white border border-indigo-500/30 shadow-sm'
           : hasUnread
-          ? 'text-white hover:bg-white/5'
-          : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-        }
-      `}
+          ? 'text-white hover:bg-white/[0.05]'
+          : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
+      }`}
     >
-      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r bg-brand-500" />}
-      <span className={`${isActive ? 'text-brand-400' : 'text-slate-500 group-hover:text-slate-300'}`}>
+      <span
+        className={`transition-colors ${
+          isActive
+            ? 'text-indigo-400'
+            : isVoice
+            ? 'text-emerald-400/80 group-hover:text-emerald-400'
+            : 'text-slate-500 group-hover:text-slate-300'
+        }`}
+      >
         {ICONS[channel.type] ?? ICONS.text}
       </span>
-      <span className="flex-1 truncate text-left font-medium">{channel.name}</span>
-      {channel.isLocked && <Lock size={12} className="flex-shrink-0 text-slate-600" />}
+      <span className="flex-1 truncate text-left">{channel.name}</span>
+      {channel.isLocked && <Lock size={12} className="flex-shrink-0 text-slate-500" />}
       {hasUnread && !isActive && (
-        <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-brand-500 text-white text-[10px] font-bold">
+        <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-indigo-500 text-white text-[10px] font-bold">
           {(channel.unreadCount ?? 0) > 99 ? '99+' : channel.unreadCount}
         </span>
       )}
-      {/* Add channel button on hover */}
-      <button
-        onClick={(e) => e.stopPropagation()}
-        className="ml-auto hidden group-hover:flex items-center justify-center h-4 w-4 rounded text-slate-500 hover:text-white transition-colors"
-        aria-label={`Add channel to ${channel.name}`}
-      >
-        <Plus size={12} />
-      </button>
-    </motion.button>
+    </button>
   );
 }
 
@@ -114,16 +120,18 @@ function Category({
   const [collapsed, setCollapsed] = useState(category.collapsed ?? false);
 
   return (
-    <div className="mb-2">
+    <div className="mb-3">
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="group flex w-full items-center gap-1 px-1 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+        className="group flex w-full items-center gap-1.5 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
       >
-        <motion.span animate={{ rotate: collapsed ? -90 : 0 }} transition={{ duration: 0.15 }}>
+        <span className={cn('transition-transform duration-200', collapsed && '-rotate-90')}>
           <ChevronDown size={12} />
-        </motion.span>
-        <span className="flex-1 text-left">{category.name}</span>
-        <Plus size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+        </span>
+        <span className="flex-1 text-left truncate">{category.name}</span>
+        <span className="text-[10px] text-slate-500 font-normal group-hover:text-slate-400">
+          {category.channels?.length || 0}
+        </span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -132,10 +140,10 @@ function Category({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden space-y-0.5 pl-1"
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden space-y-0.5 pt-0.5"
           >
-            {category.channels.map((ch) => (
+            {(category.channels || []).map((ch) => (
               <ChannelItem
                 key={ch.id}
                 channel={ch}
@@ -162,26 +170,26 @@ function UserFooter() {
   const customStatus = (user as any)?.customStatus || (user as any)?.bio || 'Online';
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-2 px-2 py-2 bg-[hsl(var(--bg-sunken))] border-t border-white/5">
+    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 bg-[#080911]/90 backdrop-blur-md border-t border-white/[0.06]">
       <button
         onClick={() => router.push('/profile/me')}
-        className="flex items-center gap-2 flex-1 min-w-0 rounded-md p-1 hover:bg-white/5 transition-colors"
+        className="flex items-center gap-2.5 flex-1 min-w-0 rounded-xl p-1 hover:bg-white/[0.06] transition-colors text-left cursor-pointer group"
       >
         <div className="relative flex-shrink-0">
           {avatar ? (
-            <img src={avatar} alt={displayName} className="w-8 h-8 rounded-full object-cover" />
+            <img src={avatar} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500/30 group-hover:ring-indigo-400" />
           ) : (
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-indigo-600"
-            >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-tr from-indigo-600 to-violet-600 shadow-sm">
               {initials}
             </div>
           )}
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[hsl(var(--bg-sunken))] bg-emerald-500" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#080911] bg-emerald-500" />
         </div>
-        <div className="min-w-0 text-left">
-          <div className="text-sm font-semibold text-white truncate">{displayName}</div>
-          <div className="text-[10px] text-slate-500 truncate">{customStatus}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold text-white truncate group-hover:text-indigo-300 transition-colors">
+            {displayName}
+          </div>
+          <div className="text-[10px] text-slate-400 truncate">{customStatus}</div>
         </div>
       </button>
 
@@ -189,37 +197,48 @@ function UserFooter() {
         <button
           onClick={toggleMute}
           aria-label={isMuted ? 'Unmute' : 'Mute'}
-          className={`p-1.5 rounded transition-colors ${isMuted ? 'text-red-400 hover:bg-red-500/20' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+            isMuted
+              ? 'text-red-400 bg-red-500/15'
+              : 'text-slate-400 hover:bg-white/[0.08] hover:text-white'
+          }`}
+          title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
         >
-          {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+          {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
         </button>
         <button
           onClick={toggleDeafen}
           aria-label={isDeafened ? 'Undeafen' : 'Deafen'}
-          className={`p-1.5 rounded transition-colors ${isDeafened ? 'text-red-400 hover:bg-red-500/20' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+            isDeafened
+              ? 'text-red-400 bg-red-500/15'
+              : 'text-slate-400 hover:bg-white/[0.08] hover:text-white'
+          }`}
+          title={isDeafened ? 'Undeafen Audio' : 'Deafen Audio'}
         >
-          {isDeafened ? <VolumeX size={16} /> : <Headphones size={16} />}
+          {isDeafened ? <VolumeX size={15} /> : <Headphones size={15} />}
         </button>
         <button
           onClick={() => router.push('/settings')}
           aria-label="Settings"
-          className="p-1.5 rounded text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+          className="p-1.5 rounded-lg text-slate-400 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer"
+          title="Account Settings"
         >
-          <Settings size={16} />
+          <Settings size={15} />
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Channel Sidebar ──────────────────────────────────────────────────────────
+// ─── Main Channel Sidebar ─────────────────────────────────────────────────────
 export function ChannelSidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
   // Parse current communityId and channelId from URL
-  const communityId = pathname.match(/\/c\/([^/]+)/)?.[1] ?? null;
-  const channelId = pathname.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
+  const communityId = pathname?.match(/\/c\/([^/]+)/)?.[1] ?? null;
+  const channelId = pathname?.match(/\/c\/[^/]+\/([^/]+)/)?.[1] ?? null;
 
   const { communities, categories, activeCommunity, leaveCommunity } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
@@ -243,21 +262,23 @@ export function ChannelSidebar() {
       };
     }
   }, [currentUser?.id, initConversationsListener]);
+
   const community =
-    communities.find((c) => c.id === communityId) ??
-        (communityId
+    (communities || []).find((c) => c.id === communityId) ??
+    (communityId
       ? {
           id: communityId,
           name: communityId.replace(/^com_/, '').replace(/[_-]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
           ownerId: 'usr-current',
         }
       : null);
+
   const hasDeletePower = canDeleteCommunity(community as any, currentUser);
-  const isDMs = pathname.startsWith('/messages');
+  const isDMs = pathname?.startsWith('/messages');
 
   // ── DM View ────────────────────────────────────────────────────────────────
   if (isDMs) {
-    const filteredDMs = conversations.filter((c) => {
+    const filteredDMs = (conversations || []).filter((c) => {
       const otherUid = c.participants.find((p) => p !== currentUser?.id) || c.participants[0];
       const details = c.participantDetails?.[otherUid];
       const name = details?.displayName || details?.username || '';
@@ -265,84 +286,68 @@ export function ChannelSidebar() {
     });
 
     return (
-      <nav className="flex flex-col h-full bg-[hsl(var(--bg-raised))] border-r border-white/5" aria-label="Direct messages">
-        <div className="flex-shrink-0 px-3 pt-4 pb-2">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Direct Messages</span>
+      <nav className="flex flex-col h-full bg-[#0b0c16] border-r border-white/[0.06]" aria-label="Direct messages">
+        <div className="flex-shrink-0 px-4 pt-4 pb-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <span>Direct Messages</span>
+            </span>
             <button
               onClick={() => router.push('/messages')}
-              className="p-1 rounded-md text-brand-400 hover:bg-brand-500/10 transition-colors"
+              className="p-1 rounded-lg text-indigo-400 hover:bg-indigo-500/15 transition-colors cursor-pointer"
               title="Start a new DM"
             >
               <Plus size={15} />
             </button>
           </div>
           <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
-              placeholder="Filter DMs..."
+              placeholder="Search conversations..."
               value={dmSearch}
               onChange={(e) => setDmSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-md bg-[hsl(var(--bg-sunken))] text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 space-y-0.5 scrollbar-thin scrollbar-thumb-white/10">
           {filteredDMs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-              <div className="w-10 h-10 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
-                <Users size={18} className="text-brand-400" />
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3">
+                <Users size={18} className="text-indigo-400" />
               </div>
-              <p className="text-xs text-slate-400">No active conversations</p>
-              <button
-                onClick={() => router.push('/messages')}
-                className="text-xs text-brand-400 font-medium hover:underline mt-1.5"
-              >
-                + New message
-              </button>
+              <p className="text-xs text-slate-400">No conversations yet</p>
             </div>
           ) : (
-            filteredDMs.map((dm) => {
-              const otherUid = dm.participants.find((p) => p !== currentUser?.id) || dm.participants[0];
-              const details = dm.participantDetails?.[otherUid] || {
-                displayName: 'Community Member',
-                username: 'user',
-                avatar: '',
-                status: 'online',
-              };
-              const name = details.displayName || details.username || 'User';
-              const isActive = pathname === `/messages/${dm.id}`;
+            filteredDMs.map((conv) => {
+              const otherUid = conv.participants.find((p) => p !== currentUser?.id) || conv.participants[0];
+              const details = conv.participantDetails?.[otherUid];
+              const name = details?.displayName || details?.username || 'User';
 
               return (
                 <button
-                  key={dm.id}
-                  onClick={() => router.push(`/messages/${dm.id}`)}
-                  className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded-lg transition-colors text-left ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                  }`}
+                  key={conv.id}
+                  onClick={() => router.push(`/messages/${conv.id}`)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left hover:bg-white/[0.06] transition-colors cursor-pointer group"
                 >
                   <div className="relative flex-shrink-0">
-                    {details.avatar ? (
-                      <img src={details.avatar} alt={name} className="w-8 h-8 rounded-full object-cover" />
+                    {details?.avatar ? (
+                      <img src={details.avatar} alt="" className="w-8 h-8 rounded-full object-cover ring-1 ring-white/10" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
                         {getInitials(name)}
                       </div>
                     )}
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[hsl(var(--bg-raised))]"
-                      style={{
-                        backgroundColor: getUserEffectiveStatus(details, currentUser?.id) === 'offline' ? '#6b7280' : '#22c55e',
-                      }}
-                    />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate text-xs font-medium text-slate-200">{name}</div>
-                    <div className="text-[10px] text-slate-500 truncate">{dm.lastMessage || 'Sent a message'}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-white truncate group-hover:text-indigo-300 transition-colors">
+                      {name}
+                    </div>
+                    <div className="text-[11px] text-slate-400 truncate">
+                      {conv.lastMessage?.text || 'Direct Message'}
+                    </div>
                   </div>
                 </button>
               );
@@ -357,12 +362,12 @@ export function ChannelSidebar() {
 
   // ── Community Channel View ──────────────────────────────────────────────────
   return (
-    <nav className="flex flex-col h-full bg-[hsl(var(--bg-raised))] border-r border-white/5" aria-label={community ? `${community.name} channels` : 'Channels'}>
-      {/* Community header */}
-      <div className="flex-shrink-0 border-b border-white/5 relative">
+    <nav className="flex flex-col h-full bg-[#0b0c16] border-r border-white/[0.06]" aria-label={community ? `${community.name} channels` : 'Channels'}>
+      {/* Community Header */}
+      <div className="flex-shrink-0 border-b border-white/[0.06] relative">
         <button
           onClick={() => setShowCommunityMenu((prev) => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors group text-left"
+          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.04] transition-colors group text-left cursor-pointer"
         >
           <div className="flex items-center gap-2 min-w-0 pr-1">
             <span className="font-bold text-white text-sm truncate">
@@ -387,7 +392,6 @@ export function ChannelSidebar() {
         <AnimatePresence>
           {showCommunityMenu && community && (
             <>
-              {/* Invisible overlay to close on outside click */}
               <div
                 className="fixed inset-0 z-40"
                 onClick={() => setShowCommunityMenu(false)}
@@ -398,22 +402,20 @@ export function ChannelSidebar() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.12 }}
-                className="absolute top-full left-2 right-2 mt-1 z-50 rounded-xl bg-[#18191c] border border-white/10 p-1.5 shadow-2xl backdrop-blur-lg"
+                className="absolute top-full left-2 right-2 mt-1 z-50 rounded-2xl bg-[#121324]/95 border border-white/10 p-1.5 shadow-2xl backdrop-blur-2xl"
               >
-                {/* Community Settings */}
                 <button
                   onClick={() => {
                     setShowCommunityMenu(false);
                     router.push(`/c/${community.id}/admin`);
                   }}
-                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-200 hover:bg-brand-500 hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:bg-indigo-600 hover:text-white transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
                     <Settings size={14} /> Community Settings
                   </span>
                 </button>
 
-                {/* Invite Link */}
                 <button
                   onClick={() => {
                     if (typeof window !== 'undefined') {
@@ -422,23 +424,22 @@ export function ChannelSidebar() {
                       setTimeout(() => setCopiedInvite(false), 2000);
                     }
                   }}
-                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-indigo-300 hover:bg-indigo-500/20 transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
                     <LinkIcon size={14} /> {copiedInvite ? 'Link Copied!' : 'Copy Invite Link'}
                   </span>
                 </button>
 
-                <div className="my-1 border-t border-white/8" />
+                <div className="my-1 border-t border-white/[0.08]" />
 
-                {/* Delete Community */}
                 {hasDeletePower ? (
                   <button
                     onClick={() => {
                       setShowCommunityMenu(false);
                       openDeleteCommunityModal(community as any);
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-600 hover:text-white transition-colors group"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-600 hover:text-white transition-colors group cursor-pointer"
                   >
                     <Trash2 size={14} />
                     <span>Delete Community</span>
@@ -450,7 +451,7 @@ export function ChannelSidebar() {
                       leaveCommunity(community.id);
                       router.push('/discover');
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                   >
                     <LogOut size={14} /> Leave Community
                   </button>
@@ -461,16 +462,16 @@ export function ChannelSidebar() {
         </AnimatePresence>
       </div>
 
-      {/* Search */}
-      <div className="flex-shrink-0 px-3 pt-3 pb-1">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[hsl(var(--bg-sunken))] text-sm text-slate-500">
-          <Search size={14} />
+      {/* Search channels */}
+      <div className="flex-shrink-0 px-3 pt-3 pb-2">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs text-slate-400">
+          <Search size={14} className="text-slate-500" />
           <span>Search channels...</span>
         </div>
       </div>
 
-      {/* Channels */}
-      <div className="flex-1 overflow-y-auto px-2 pt-2 scrollbar-thin scrollbar-thumb-white/10">
+      {/* Channels List */}
+      <div className="flex-1 overflow-y-auto px-2 pt-1 scrollbar-thin scrollbar-thumb-white/10">
         {communityId ? (
           (categories.length > 0 ? categories : getDefaultCategories(communityId)).map((cat) => (
             <Category
@@ -481,36 +482,37 @@ export function ChannelSidebar() {
             />
           ))
         ) : (
-          <div className="flex flex-col items-center justify-center px-3 py-8 text-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center text-2xl">
-              🌐
+          <div className="flex flex-col items-center justify-center px-4 py-12 text-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-violet-500/10 to-transparent border border-indigo-500/20 flex items-center justify-center text-2xl shadow-inner">
+              ✨
             </div>
             <div>
-              <p className="text-sm font-semibold text-white mb-1">No community selected</p>
-              <p className="text-xs text-slate-500 leading-relaxed">Click a community on the left, or explore new ones</p>
+              <p className="text-sm font-bold text-white mb-1">No Space Selected</p>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-[190px]">
+                Pick a community from the left bar or discover new spaces.
+              </p>
             </div>
             <button
               onClick={() => router.push('/discover')}
-              className="mt-1 px-4 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-xs font-semibold hover:bg-indigo-500/25 transition-colors"
+              className="mt-1 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
             >
-              Explore communities →
+              Explore Communities →
             </button>
           </div>
         )}
 
-        {/* Admin link */}
         {communityId && (
-          <div className="mt-2 mb-1 px-1">
+          <div className="mt-2 mb-2 px-1">
             <button
               onClick={() => router.push(`/c/${communityId}/admin`)}
-              className="group flex w-full items-center justify-between px-2 py-1.5 rounded-md text-xs text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
+              className="group flex w-full items-center justify-between px-2.5 py-2 rounded-xl text-xs text-slate-400 hover:bg-white/[0.05] hover:text-white transition-colors cursor-pointer"
             >
-              <span className="flex items-center gap-1.5">
-                <Settings size={14} />
+              <span className="flex items-center gap-2">
+                <Settings size={14} className="text-slate-500 group-hover:text-slate-300" />
                 <span>Community Settings</span>
               </span>
               {hasDeletePower && (
-                <span className="text-[10px] text-amber-400/80 font-medium px-1.5 py-0.5 rounded bg-amber-400/10">
+                <span className="text-[10px] text-amber-400 font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/20">
                   Admin
                 </span>
               )}

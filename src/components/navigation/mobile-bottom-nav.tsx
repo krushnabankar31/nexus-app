@@ -20,7 +20,7 @@ export function MobileBottomNav() {
   const { user } = useAuthStore();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-white/8 bg-[hsl(var(--bg-raised))/90] backdrop-blur-xl md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-white/[0.08] bg-[#080911]/90 backdrop-blur-2xl md:hidden">
       {NAV_ITEMS.map((item) => {
         const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
         const Icon = item.icon;
@@ -30,7 +30,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className="relative -top-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 shadow-glow transition-transform active:scale-95"
+              className="relative -top-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 shadow-xl shadow-indigo-500/30 border border-indigo-400/30 transition-transform active:scale-95"
             >
               <Icon className="h-6 w-6 text-white" />
             </Link>
@@ -46,13 +46,13 @@ export function MobileBottomNav() {
             >
               <div className={cn(
                 'h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold ring-2 transition-all',
-                isActive ? 'ring-brand-500' : 'ring-transparent'
+                isActive ? 'ring-indigo-400' : 'ring-transparent'
               )}
-                style={{ background: `url(${user.avatar}) center/cover, linear-gradient(135deg, #6366f1, #8b5cf6)` }}
+                style={{ background: user.avatar ? `url(${user.avatar}) center/cover` : 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
               >
                 {!user.avatar && <span className="text-white">{getInitials(user.displayName)}</span>}
               </div>
-              <span className={cn('text-[10px] font-medium', isActive ? 'text-brand-400' : 'text-gray-500')}>
+              <span className={cn('text-[10px] font-medium', isActive ? 'text-indigo-400' : 'text-slate-500')}>
                 Profile
               </span>
             </Link>
@@ -66,12 +66,12 @@ export function MobileBottomNav() {
             className="flex flex-col items-center gap-1 px-4 py-2"
           >
             <div className="relative">
-              <Icon className={cn('h-6 w-6 transition-colors', isActive ? 'text-brand-400' : 'text-gray-500')} />
+              <Icon className={cn('h-5 w-5 transition-colors', isActive ? 'text-indigo-400' : 'text-slate-500')} />
               {isActive && (
-                <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-brand-500" />
+                <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-indigo-400 shadow-sm shadow-indigo-400" />
               )}
             </div>
-            <span className={cn('text-[10px] font-medium transition-colors', isActive ? 'text-brand-400' : 'text-gray-500')}>
+            <span className={cn('text-[10px] font-medium transition-colors', isActive ? 'text-indigo-400' : 'text-slate-500')}>
               {item.label}
             </span>
           </Link>
