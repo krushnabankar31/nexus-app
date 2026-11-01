@@ -29,10 +29,10 @@ import { useCallStore } from '@/stores/call-store';
 import type { User } from '@nexus/types';
 
 const STATUS_CONFIG = {
-  online: { color: 'bg-green-400', label: 'Online' },
+  online: { color: 'bg-emerald-400', label: 'Online' },
   idle: { color: 'bg-amber-400', label: 'Idle' },
-  dnd: { color: 'bg-red-500', label: 'Do Not Disturb' },
-  offline: { color: 'bg-gray-500', label: 'Offline' },
+  dnd: { color: 'bg-rose-500', label: 'Do Not Disturb' },
+  offline: { color: 'bg-slate-500', label: 'Offline' },
 } as const;
 
 interface DisplayMember {
@@ -211,27 +211,28 @@ export function MemberPanel() {
           }
         }}
         className={cn(
-          'group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 transition-colors text-left',
-          isMe ? 'cursor-default' : 'hover:bg-white/8 cursor-pointer'
+          'group flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-all text-left outline-none',
+          isMe
+            ? 'cursor-default'
+            : 'hover:bg-white/[0.05] active:bg-white/[0.08] cursor-pointer'
         )}
       >
-        {/* Avatar */}
+        {/* Avatar with Status Dot */}
         <div className="relative shrink-0">
           {user.avatar ? (
             <img
               src={user.avatar}
               alt={displayName}
-              className="h-8 w-8 rounded-full object-cover"
+              className="h-8 w-8 rounded-full object-cover ring-1 ring-white/10 group-hover:ring-indigo-500/40 transition-all"
             />
           ) : (
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shadow-sm">
               {getInitials(displayName)}
             </div>
           )}
-          {/* Status dot */}
           <span
             className={cn(
-              'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[hsl(var(--bg-base))]',
+              'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#080911]',
               statusCfg.color
             )}
           />
@@ -239,8 +240,8 @@ export function MemberPanel() {
 
         {/* Info */}
         <div className="flex min-w-0 flex-col items-start flex-1">
-          <div className="flex items-center gap-1 w-full">
-            <span className="truncate text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
+          <div className="flex items-center gap-1.5 w-full">
+            <span className="truncate text-xs font-semibold text-slate-200 group-hover:text-white transition-colors">
               {displayName}
             </span>
             {isMe && (
@@ -252,10 +253,10 @@ export function MemberPanel() {
               <Crown className="h-3 w-3 text-amber-400 shrink-0" />
             )}
             {!isMe && !member.isAdmin && (
-              <UserCheck className="h-3 w-3 text-brand-400 shrink-0" />
+              <UserCheck className="h-3 w-3 text-indigo-400 shrink-0" />
             )}
           </div>
-          <span className="text-xs text-gray-500 capitalize">
+          <span className="text-[10px] text-slate-500 capitalize truncate">
             {member.role || effectiveStatus}
           </span>
         </div>
@@ -275,26 +276,24 @@ export function MemberPanel() {
     const [collapsed, setCollapsed] = useState(false);
     if (groupMembers.length === 0) return null;
     return (
-      <div>
+      <div className="mb-2">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center gap-1.5 px-2 py-1 text-left"
+          className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
         >
           <ChevronDown
             className={cn(
-              'h-3 w-3 text-gray-500 transition-transform',
+              'h-3 w-3 text-slate-500 transition-transform duration-200',
               collapsed && '-rotate-90'
             )}
           />
-          <span
-            className="text-xs font-bold uppercase tracking-wider"
-            style={{ color }}
-          >
-            {label} - {groupMembers.length}
+          <span style={{ color }}>{label}</span>
+          <span className="text-[10px] text-slate-500 font-normal">
+            - {groupMembers.length}
           </span>
         </button>
         {!collapsed && (
-          <div className="space-y-0.5 pb-2">
+          <div className="space-y-0.5 pt-0.5">
             {groupMembers.map((m) => (
               <MemberRow key={m.userId} member={m} />
             ))}
@@ -310,38 +309,40 @@ export function MemberPanel() {
       : 'none';
 
   return (
-    <aside className="relative flex h-full w-64 shrink-0 flex-col border-l border-white/8 bg-[hsl(var(--bg-base))]">
+    <aside className="relative flex h-full w-64 shrink-0 flex-col border-l border-white/[0.06] bg-[#080911] select-none">
       {/* Header */}
-      <div className="p-4 pb-2 border-b border-white/5">
-        <div className="flex items-center justify-between mb-2">
+      <div className="p-4 pb-2 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between mb-2.5">
           {isInsideCommunity ? (
             <div className="min-w-0 pr-2">
               <h3
-                className="text-sm font-bold text-gray-200 truncate"
+                className="text-xs font-bold text-white uppercase tracking-wider truncate"
                 title={activeCommunity.name}
               >
                 {activeCommunity.name}
               </h3>
-              <span className="text-[11px] text-gray-500 font-normal">
+              <span className="text-[10px] text-slate-400 font-medium">
                 {allDisplayMembers.length}{' '}
                 {allDisplayMembers.length === 1 ? 'member' : 'members'}
                 {isPrivateCommunity ? ' · 🔒 Private' : ' · 🌐 Public'}
               </span>
             </div>
           ) : (
-            <h3 className="text-sm font-bold text-gray-200">
-              Members{' '}
-              <span className="text-gray-500 font-normal">
-                - {allDisplayMembers.length}
+            <div className="min-w-0">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Members
+              </h3>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {allDisplayMembers.length} connected
               </span>
-            </h3>
+            </div>
           )}
 
           {isInsideCommunity ? (
             isOwner && safeJoinRequests.length > 0 && (
               <button
                 onClick={() => setIsJoinRequestsModalOpen(true)}
-                className="relative flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all shadow-sm cursor-pointer shrink-0 animate-pulse"
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all shadow-sm cursor-pointer shrink-0 animate-pulse"
                 title="Review pending member requests"
               >
                 <Shield size={13} />
@@ -354,13 +355,13 @@ export function MemberPanel() {
           ) : (
             <button
               onClick={() => setIsModalOpen(true)}
-              className="relative flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500/15 hover:bg-brand-500/25 border border-brand-500/30 text-brand-400 hover:text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+              className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
               title="Discover users & connection requests"
             >
               <UserPlus size={13} />
               <span>Connect</span>
               {safeIncomingRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
                   {safeIncomingRequests.length}
                 </span>
               )}
@@ -369,36 +370,35 @@ export function MemberPanel() {
         </div>
 
         {/* Search */}
-        <div className="flex items-center gap-2 rounded-xl bg-white/8 px-3 py-2 border border-white/10 focus-within:border-indigo-500/40 transition-colors">
-          <Search className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-1.5 border border-white/[0.06] focus-within:border-indigo-500/40 transition-colors">
+          <Search className="h-3.5 w-3.5 text-slate-500 shrink-0" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={
               isInsideCommunity
-                ? 'Search community members'
-                : 'Search connected members'
+                ? 'Search members...'
+                : 'Search connections...'
             }
-            className="flex-1 bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none"
+            className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
           />
         </div>
       </div>
 
-      {/* Member list content */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 scrollbar-thin scrollbar-thumb-white/10">
+      {/* Member List Content */}
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin scrollbar-thumb-white/10">
         {isInsideCommunity && isPrivateCommunity && !isCommunityMember ? (
-          <div className="p-4 mx-1 rounded-2xl bg-white/5 border border-white/5 text-center space-y-2.5 my-4">
-            <div className="w-10 h-10 mx-auto rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              <Lock size={20} />
+          <div className="p-5 mx-1 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-center space-y-2.5 my-4">
+            <div className="w-10 h-10 mx-auto rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-400">
+              <Lock size={18} />
             </div>
             <h4 className="text-xs font-bold text-white">Private Community</h4>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Members directory and discussions are private. You must request
-              access from the owner to view members.
+              Members directory is private. Submit a join request to view other members.
             </p>
             {isPendingCommunityJoin ? (
-              <div className="w-full py-1.5 px-3 rounded-xl bg-white/10 text-amber-400 text-xs font-semibold flex items-center justify-center gap-1.5">
+              <div className="w-full py-1.5 px-3 rounded-xl bg-white/10 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5">
                 <Clock size={13} /> Request Pending
               </div>
             ) : (
@@ -408,7 +408,7 @@ export function MemberPanel() {
                     requestToJoinPrivateCommunity(activeCommunity, currentUser);
                   }
                 }}
-                className="w-full py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black text-xs font-semibold shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                className="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-black text-xs font-bold shadow-md shadow-amber-500/20 transition-all cursor-pointer"
               >
                 Request to Join 🔒
               </button>
@@ -417,28 +417,27 @@ export function MemberPanel() {
         ) : isInsideCommunity ? (
           <>
             <GroupSection
-              label="Admins & Staff"
-              color="#ef4444"
+              label="Staff / Admins"
+              color="#f87171"
               members={admins}
             />
-            <GroupSection label="Online" color="#22c55e" members={online} />
-            <GroupSection label="Offline" color="#6b7280" members={offline} />
+            <GroupSection label="Online" color="#34d399" members={online} />
+            <GroupSection label="Offline" color="#94a3b8" members={offline} />
           </>
         ) : (
           <>
             {safeConnectedMembers.length === 0 && (
-              <div className="p-4 mx-1 rounded-2xl bg-white/5 border border-white/5 text-center space-y-2 my-2">
-                <Lock size={20} className="mx-auto text-brand-400" />
-                <h4 className="text-xs font-bold text-white">
-                  Private Network
-                </h4>
+              <div className="p-5 mx-1 rounded-2xl bg-gradient-to-b from-indigo-500/10 to-transparent border border-indigo-500/20 text-center space-y-2.5 my-3 shadow-inner">
+                <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Lock size={18} />
+                </div>
+                <h4 className="text-xs font-bold text-white">Private Network</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  New members are private. Send connection requests to discover
-                  and connect with other users.
+                  Your profile and connections are private. Discover and connect with other members.
                 </p>
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="w-full py-1.5 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition-all cursor-pointer"
+                  className="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white text-xs font-semibold shadow-md shadow-indigo-500/25 transition-all cursor-pointer"
                 >
                   + Find Connections
                 </button>
@@ -446,23 +445,23 @@ export function MemberPanel() {
             )}
             <GroupSection
               label="Online"
-              color="#22c55e"
+              color="#34d399"
               members={nonCommOnline}
             />
             <GroupSection
               label="Offline"
-              color="#6b7280"
+              color="#94a3b8"
               members={nonCommOffline}
             />
           </>
         )}
       </div>
 
-      {/* Footer: status counters */}
-      <div className="border-t border-white/8 p-3">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+      {/* Footer Status Counters */}
+      <div className="border-t border-white/[0.06] p-3 bg-[#080911]/90 backdrop-blur-md">
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5">
-            <Circle className="h-2 w-2 fill-green-400 text-green-400" />
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
             <span>
               {isInsideCommunity
                 ? admins.length + online.length
@@ -477,13 +476,13 @@ export function MemberPanel() {
         </div>
       </div>
 
-      {/* Member Profile Popover / Modal */}
+      {/* Member Profile Detail Popover */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-xs rounded-2xl border border-white/10 bg-[hsl(var(--bg-raised))] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-xs rounded-3xl border border-white/10 bg-[#121324] p-5 shadow-2xl">
             <button
               onClick={() => setSelectedUser(null)}
-              className="absolute top-3.5 right-3.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="absolute top-3.5 right-3.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -494,20 +493,20 @@ export function MemberPanel() {
                   <img
                     src={selectedUser.avatar}
                     alt=""
-                    className="w-16 h-16 rounded-full object-cover ring-4 ring-brand-500/30"
+                    className="w-16 h-16 rounded-full object-cover ring-4 ring-indigo-500/30"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xl font-bold text-white shadow-lg">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xl font-bold text-white shadow-lg">
                     {getInitials(selectedUser.displayName || 'User')}
                   </div>
                 )}
                 <span
                   className={cn(
-                    'absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-[hsl(var(--bg-raised))]',
+                    'absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-[#121324]',
                     getUserEffectiveStatus(selectedUser, currentUser?.id) ===
                       'offline'
-                      ? 'bg-gray-500'
-                      : 'bg-green-400'
+                      ? 'bg-slate-500'
+                      : 'bg-emerald-400'
                   )}
                 />
               </div>
@@ -517,28 +516,28 @@ export function MemberPanel() {
                   {selectedUser.displayName || selectedUser.username}
                 </h4>
                 {selectedConnectionStatus === 'connected' && (
-                  <UserCheck size={14} className="text-brand-400" />
+                  <UserCheck size={14} className="text-indigo-400" />
                 )}
               </div>
               <p className="text-xs text-slate-400 mb-1">
                 @{selectedUser.username || 'user'}
               </p>
               {selectedUser.bio && (
-                <p className="text-xs text-slate-300 italic mb-4 max-w-[200px] truncate">
+                <p className="text-xs text-slate-300 italic mb-3 max-w-[200px] truncate">
                   "{selectedUser.bio}"
                 </p>
               )}
 
-              {/* 1-on-1 Connection Status Banner if in community */}
+              {/* 1-on-1 Connection Status Banner */}
               {isInsideCommunity && currentUser?.id !== selectedUser.id && (
                 <div className="w-full my-2">
                   {selectedConnectionStatus === 'connected' ? (
-                    <div className="flex items-center justify-center gap-1.5 py-1 px-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
-                      <Check size={12} /> Connected in Private Network
+                    <div className="flex items-center justify-center gap-1.5 py-1 px-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                      <Check size={12} /> Connected Friends
                     </div>
                   ) : selectedConnectionStatus === 'pending_sent' ? (
-                    <div className="flex items-center justify-center gap-1.5 py-1 px-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
-                      <Clock size={12} /> Connection Request Pending
+                    <div className="flex items-center justify-center gap-1.5 py-1 px-3 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-semibold">
+                      <Clock size={12} /> Connection Pending
                     </div>
                   ) : (
                     <button
@@ -547,7 +546,7 @@ export function MemberPanel() {
                           await sendConnectionRequest(currentUser, selectedUser);
                         }
                       }}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/40 text-xs font-semibold transition-all cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition-all cursor-pointer"
                     >
                       <UserPlus size={13} />
                       <span>Send Connection Request</span>
@@ -568,7 +567,7 @@ export function MemberPanel() {
                     router.push(`/messages/${convId}`);
                     setSelectedUser(null);
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-brand-500 text-white font-semibold text-xs hover:bg-brand-600 transition-all shadow-md shadow-brand-500/20 active:scale-95 cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer"
                 >
                   <MessageSquare size={14} /> Message
                 </button>
@@ -582,7 +581,7 @@ export function MemberPanel() {
                     startCall(currentUser, selectedUser, 'voice', convId);
                     setSelectedUser(null);
                   }}
-                  className="p-2.5 rounded-xl bg-white/10 hover:bg-emerald-500/20 hover:text-emerald-400 text-slate-300 border border-white/10 transition-all active:scale-95 cursor-pointer"
+                  className="p-2.5 rounded-xl bg-white/[0.06] hover:bg-emerald-500/20 hover:text-emerald-400 text-slate-300 border border-white/[0.08] transition-all active:scale-95 cursor-pointer"
                   title="Voice Call"
                 >
                   <Phone size={15} />
@@ -597,21 +596,21 @@ export function MemberPanel() {
                     startCall(currentUser, selectedUser, 'video', convId);
                     setSelectedUser(null);
                   }}
-                  className="p-2.5 rounded-xl bg-white/10 hover:bg-indigo-500/20 hover:text-indigo-400 text-slate-300 border border-white/10 transition-all active:scale-95 cursor-pointer"
+                  className="p-2.5 rounded-xl bg-white/[0.06] hover:bg-indigo-500/20 hover:text-indigo-400 text-slate-300 border border-white/[0.08] transition-all active:scale-95 cursor-pointer"
                   title="Video Call"
                 >
                   <Video size={15} />
                 </button>
               </div>
 
-              {/* Profile link & Disconnect option */}
-              <div className="flex items-center justify-between w-full mt-3 pt-3 border-t border-white/5 text-[11px]">
+              {/* Profile Link & Disconnect Option */}
+              <div className="flex items-center justify-between w-full mt-3 pt-3 border-t border-white/[0.06] text-[11px]">
                 <button
                   onClick={() => {
                     setSelectedUser(null);
                     router.push(`/profile/${selectedUser.id}`);
                   }}
-                  className="text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   View Full Profile <ExternalLink size={10} />
                 </button>
