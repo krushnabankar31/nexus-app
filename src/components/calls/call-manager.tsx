@@ -93,16 +93,17 @@ export function CallManager() {
   const setRemoteVideo = useCallback(
     (node: HTMLVideoElement | null) => {
       remoteVideoRef.current = node;
-      if (node && remoteStream) {
-        if (node.srcObject !== remoteStream) {
-          node.srcObject = remoteStream;
-        }
-        // Force muted on video element to bypass Chrome autoplay block
-        // (audio is output through <audio ref={remoteAudioRef} />)
+      if (node) {
+        node.defaultMuted = true;
         node.muted = true;
-        const p = node.play();
-        if (p !== undefined) {
-          p.catch(() => {});
+        if (remoteStream) {
+          if (node.srcObject !== remoteStream) {
+            node.srcObject = remoteStream;
+          }
+          const p = node.play();
+          if (p !== undefined) {
+            p.catch(() => {});
+          }
         }
       }
     },
@@ -116,6 +117,7 @@ export function CallManager() {
       if (localEl.srcObject !== localStream) {
         localEl.srcObject = localStream;
       }
+      localEl.defaultMuted = true;
       localEl.muted = true;
       const p = localEl.play();
       if (p !== undefined) p.catch(() => {});
@@ -125,13 +127,16 @@ export function CallManager() {
   // Synchronize remote stream changes
   useEffect(() => {
     const remoteEl = remoteVideoRef.current;
-    if (remoteEl && remoteStream) {
-      if (remoteEl.srcObject !== remoteStream) {
+    if (remoteEl) {
+      remoteEl.defaultMuted = true;
+      remoteEl.muted = true;
+      if (remoteStream && remoteEl.srcObject !== remoteStream) {
         remoteEl.srcObject = remoteStream;
       }
-      remoteEl.muted = true;
-      const p = remoteEl.play();
-      if (p !== undefined) p.catch(() => {});
+      if (remoteStream) {
+        const p = remoteEl.play();
+        if (p !== undefined) p.catch(() => {});
+      }
     }
   }, [remoteStream, callStatus]);
 
@@ -314,6 +319,14 @@ export function CallManager() {
                       className="w-full h-full object-cover"
                       onLoadedMetadata={(e) => {
                         const vid = e.currentTarget;
+                        vid.defaultMuted = true;
+                        vid.muted = true;
+                        const p = vid.play();
+                        if (p !== undefined) p.catch(() => {});
+                      }}
+                      onCanPlay={(e) => {
+                        const vid = e.currentTarget;
+                        vid.defaultMuted = true;
                         vid.muted = true;
                         const p = vid.play();
                         if (p !== undefined) p.catch(() => {});
@@ -321,13 +334,17 @@ export function CallManager() {
                     />
 
                     {/* Fallback if remote video track is not active or awaiting frames */}
-                    {!remoteStream || remoteStream.getVideoTracks().length === 0 || !remoteStream.getVideoTracks().some(t => t.enabled) ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-center p-6 z-10">
-                        <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-3xl font-bold text-white mb-3 shadow-2xl">
-                          {getInitials(otherName)}
+                    {!remoteStream || remoteStream.getVideoTracks().length === 0 || !remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === 'live') ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-center p-6 z-10 pointer-events-none">
+                        <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-white/10 flex items-center justify-center text-3xl font-bold text-white mb-3 shadow-2xl overflow-hidden">
+                          {otherAvatar ? (
+                            <img src={otherAvatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(otherName)
+                          )}
                         </div>
                         <h4 className="text-base font-bold text-white mb-1">{otherName}</h4>
-                        <p className="text-xs text-slate-400 animate-pulse">Connected · Receiving camera feed...</p>
+                        <p className="text-xs text-slate-400 animate-pulse">Connected · Waiting for video stream...</p>
                       </div>
                     ) : null}
 
