@@ -10,11 +10,14 @@ import {
   query,
   where,
   serverTimestamp,
+  updateDoc,
+  arrayUnion,
 } from 'firebase/firestore';
 import { playOutgoingRing, playIncomingRing, stopRingtone } from '@/lib/call-sound';
 
 export type CallType = 'voice' | 'video';
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'connected' | 'declined' | 'ended' | 'failed';
+export type PeerConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
 
 export interface CallSession {
   id: string;
@@ -30,6 +33,8 @@ export interface CallSession {
   createdAt?: any;
   offer?: any;
   answer?: any;
+  callerCandidates?: any[];
+  recipientCandidates?: any[];
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -39,6 +44,8 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelay',
@@ -68,6 +75,7 @@ interface CallState {
   incomingCall: CallSession | null;
   callStatus: CallStatus;
   callRole: 'caller' | 'recipient' | null;
+  connectionState: PeerConnectionState;
 
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -98,6 +106,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
   incomingCall: null,
   callStatus: 'idle',
   callRole: null,
+  connectionState: 'new',
 
   localStream: null,
   remoteStream: null,
@@ -277,19 +286,36 @@ export const useCallStore = create<CallState>()((set, get) => ({
         };
       };
 
-      pc.oniceconnectionstatechange = () => {
-        console.log('Caller ICE state:', pc.iceConnectionState);
+      // Monitor WebRTC Connection & ICE States
+      pc.onconnectionstatechange = () => {
+        console.log('Caller PC connection state:', pc.connectionState);
+        set({ connectionState: pc.connectionState });
       };
 
-      // 3. ICE Candidate Queue for handling early arrival
-      const candidateQueue: any[] = [];
+      pc.oniceconnectionstatechange = () => {
+        console.log('Caller ICE state:', pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          set({ connectionState: 'connected' });
+        } else if (pc.iceConnectionState === 'failed') {
+          set({ connectionState: 'failed' });
+        }
+      };
+
+      // 3. ICE Candidate Handling with Dual-Channel Signaling (Subcollection + Main Document arrayUnion)
+      const callDocRef = doc(db, 'calls', callId);
       const callerCandidatesCol = collection(db, 'calls', callId, 'callerCandidates');
+      const processedCandidates = new Set<string>();
 
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && event.candidate.candidate) {
           const candidateData = event.candidate.toJSON();
+          // Write to subcollection (channel 1)
           const candDoc = doc(callerCandidatesCol);
           setDoc(candDoc, candidateData).catch(() => {});
+          // Write to main call document (channel 2 - immune to subcollection rule restrictions)
+          updateDoc(callDocRef, {
+            callerCandidates: arrayUnion(candidateData),
+          }).catch(() => {});
         }
       };
 
@@ -300,14 +326,31 @@ export const useCallStore = create<CallState>()((set, get) => ({
       });
       await pc.setLocalDescription(offer);
 
-      const callDocRef = doc(db, 'calls', callId);
       await setDoc(callDocRef, {
         ...newCall,
         offer: { type: offer.type, sdp: offer.sdp },
         createdAt: serverTimestamp(),
       });
 
-      // 5. Listen to call document for answer / status change
+      const applyCandidate = async (candData: any) => {
+        if (!candData || !candData.candidate) return;
+        const key = `${candData.candidate}_${candData.sdpMLineIndex}_${candData.sdpMid}`;
+        if (processedCandidates.has(key)) return;
+        processedCandidates.add(key);
+
+        try {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(candData));
+          } else {
+            candidateQueue.push(candData);
+          }
+        } catch (err) {
+          console.warn('ICE candidate addition notice:', err);
+        }
+      };
+
+      // 5. Listen to call document for answer / status change / document candidates
+      const candidateQueue: any[] = [];
       onSnapshot(callDocRef, async (snap) => {
         if (!snap.exists()) return;
         const data = snap.data() as CallSession;
@@ -326,23 +369,29 @@ export const useCallStore = create<CallState>()((set, get) => ({
             } catch (e) {}
           }
 
-          // Listen for recipient ICE candidates
+          // Channel 1: Listen for recipient ICE candidates from subcollection
           const recipientCandCol = collection(db, 'calls', callId, 'recipientCandidates');
-          onSnapshot(recipientCandCol, (candSnap) => {
-            candSnap.docChanges().forEach(async (change) => {
-              if (change.type === 'added') {
-                const candData = change.doc.data();
-                try {
-                  if (pc.remoteDescription && pc.remoteDescription.type) {
-                    await pc.addIceCandidate(new RTCIceCandidate(candData));
-                  } else {
-                    candidateQueue.push(candData);
-                  }
-                } catch (e) {}
-              }
-            });
-          });
-        } else if (data.status === 'declined') {
+          onSnapshot(
+            recipientCandCol,
+            (candSnap) => {
+              candSnap.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                  applyCandidate(change.doc.data());
+                }
+              });
+            },
+            (err) => console.warn('Recipient cand subcollection notice:', err)
+          );
+        }
+
+        // Channel 2: Process recipient ICE candidates directly from main call document
+        if (Array.isArray(data.recipientCandidates) && pc.remoteDescription) {
+          for (const cand of data.recipientCandidates) {
+            applyCandidate(cand);
+          }
+        }
+
+        if (data.status === 'declined') {
           stopRingtone();
           set({ callStatus: 'declined' });
           setTimeout(() => {
@@ -438,10 +487,20 @@ export const useCallStore = create<CallState>()((set, get) => ({
       const pc = new RTCPeerConnection(RTC_CONFIG);
       set({ peerConnection: pc });
 
-      // Add local tracks to peer connection
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
+      // Monitor WebRTC Connection & ICE States
+      pc.onconnectionstatechange = () => {
+        console.log('Recipient PC connection state:', pc.connectionState);
+        set({ connectionState: pc.connectionState });
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('Recipient ICE state:', pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          set({ connectionState: 'connected' });
+        } else if (pc.iceConnectionState === 'failed') {
+          set({ connectionState: 'failed' });
+        }
+      };
 
       // Handle remote tracks robustly with track map accumulation and onunmute trigger
       pc.ontrack = (event) => {
@@ -466,26 +525,51 @@ export const useCallStore = create<CallState>()((set, get) => ({
         };
       };
 
-      pc.oniceconnectionstatechange = () => {
-        console.log('Recipient ICE state:', pc.iceConnectionState);
-      };
-
-      // 3. ICE candidate handling
-      const candidateQueue: any[] = [];
+      // 3. ICE candidate handling with Dual-Channel Signaling (Subcollection + Main Document arrayUnion)
+      const callDocRef = doc(db, 'calls', incoming.id);
       const recipientCandCol = collection(db, 'calls', incoming.id, 'recipientCandidates');
+      const processedCandidates = new Set<string>();
 
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && event.candidate.candidate) {
           const candidateData = event.candidate.toJSON();
+          // Write to subcollection (channel 1)
           const candDoc = doc(recipientCandCol);
           setDoc(candDoc, candidateData).catch(() => {});
+          // Write to main call document (channel 2 - immune to subcollection rule restrictions)
+          updateDoc(callDocRef, {
+            recipientCandidates: arrayUnion(candidateData),
+          }).catch(() => {});
         }
       };
 
-      // 4. Set remote offer & create answer
+      const candidateQueue: any[] = [];
+      const applyCandidate = async (candData: any) => {
+        if (!candData || !candData.candidate) return;
+        const key = `${candData.candidate}_${candData.sdpMLineIndex}_${candData.sdpMid}`;
+        if (processedCandidates.has(key)) return;
+        processedCandidates.add(key);
+
+        try {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(candData));
+          } else {
+            candidateQueue.push(candData);
+          }
+        } catch (err) {
+          console.warn('Recipient ICE candidate addition notice:', err);
+        }
+      };
+
+      // 4. Set remote offer FIRST (WebRTC RFC 8829 JSEP specification)
       if (incoming.offer) {
         await pc.setRemoteDescription(new RTCSessionDescription(incoming.offer));
       }
+
+      // Add local tracks to peer connection (aligns with remote offer's transceivers)
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
 
       // Drain early candidates
       while (candidateQueue.length > 0) {
@@ -499,7 +583,6 @@ export const useCallStore = create<CallState>()((set, get) => ({
       await pc.setLocalDescription(answer);
 
       // Update call doc in Firestore
-      const callDocRef = doc(db, 'calls', incoming.id);
       await setDoc(
         callDocRef,
         {
@@ -510,27 +593,34 @@ export const useCallStore = create<CallState>()((set, get) => ({
         { merge: true }
       );
 
-      // 5. Listen for caller ICE candidates
+      // 5. Channel 1: Listen for caller ICE candidates from subcollection
       const callerCandCol = collection(db, 'calls', incoming.id, 'callerCandidates');
-      onSnapshot(callerCandCol, (candSnap) => {
-        candSnap.docChanges().forEach(async (change) => {
-          if (change.type === 'added') {
-            const candData = change.doc.data();
-            try {
-              if (pc.remoteDescription && pc.remoteDescription.type) {
-                await pc.addIceCandidate(new RTCIceCandidate(candData));
-              } else {
-                candidateQueue.push(candData);
-              }
-            } catch (e) {}
-          }
-        });
-      });
+      onSnapshot(
+        callerCandCol,
+        (candSnap) => {
+          candSnap.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              applyCandidate(change.doc.data());
+            }
+          });
+        },
+        (err) => console.warn('Caller cand subcollection notice:', err)
+      );
 
-      // 6. Listen for call termination
+      // 6. Channel 2 & Termination: Listen for main document updates (candidates & call end)
       onSnapshot(callDocRef, (snap) => {
-        if (snap.exists() && snap.data().status === 'ended') {
+        if (!snap.exists()) return;
+        const data = snap.data() as CallSession;
+        if (data.status === 'ended') {
           get().endCall();
+          return;
+        }
+
+        // Process caller ICE candidates from main document array
+        if (Array.isArray(data.callerCandidates) && pc.remoteDescription) {
+          for (const cand of data.callerCandidates) {
+            applyCandidate(cand);
+          }
         }
       });
     } catch (err: any) {
@@ -584,6 +674,7 @@ export const useCallStore = create<CallState>()((set, get) => ({
       incomingCall: null,
       callStatus: 'idle',
       callRole: null,
+      connectionState: 'new',
       localStream: null,
       remoteStream: null,
       peerConnection: null,
