@@ -280,6 +280,7 @@ export default function UserProfilePage() {
         displayName: 'Nexus Member',
         username: 'user',
         avatar: '',
+        banner: null,
         status: 'online',
         email: '',
         bio: 'Hey there! I am using Nexus.',
@@ -1200,9 +1201,9 @@ export default function UserProfilePage() {
               </div>
             </div>
           )}
-        </>
-      )}
-    </div>
+        </div>
+      </>
+    )}
   </div>
 
       {/* ── 8. COMPREHENSIVE EDIT PROFILE MODAL ───────────────────────── */}
