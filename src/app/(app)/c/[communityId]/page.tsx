@@ -62,6 +62,11 @@ export default function CommunityPage() {
       requiresApproval: false,
     };
 
+  const safeMembers = members || [];
+  const safeCategories = categories || [];
+  const safeJoinRequests = joinRequests || [];
+  const safePendingIds = userPendingCommunityIds || [];
+
   const isOwner = !!(
     currentUser?.id &&
     community.ownerId &&
@@ -71,7 +76,7 @@ export default function CommunityPage() {
   const isMember =
     isOwner ||
     (currentUser?.id
-      ? members.some((m) => m.userId === currentUser.id)
+      ? safeMembers.some((m) => m.userId === currentUser.id)
       : false);
 
   const isPrivateCommunity =
@@ -79,18 +84,18 @@ export default function CommunityPage() {
     (community as any).isPrivate ||
     !community.isPublic;
 
-  const isPending = userPendingCommunityIds.includes(community.id);
+  const isPending = safePendingIds.includes(community.id);
 
-  const onlineMembers = members.filter(
+  const onlineMembers = safeMembers.filter(
     (m) =>
       m.user && getUserEffectiveStatus(m.user, currentUser?.id) !== 'offline'
   );
   const accentColor = community.accentColor ?? '#6366f1';
-  const memberCount = Math.max(members.length, community.memberCount ?? 1);
+  const memberCount = Math.max(safeMembers.length, community.memberCount ?? 1);
   const onlineCount = Math.max(onlineMembers.length, 1);
 
   // Quick channels from community categories
-  const allChannels = categories.flatMap((cat) => cat.channels);
+  const allChannels = safeCategories.flatMap((cat) => cat.channels || []);
   const quickChannels = allChannels.slice(0, 4);
 
   return (
@@ -174,7 +179,7 @@ export default function CommunityPage() {
       </div>
 
       {/* Owner Pending Requests Banner */}
-      {isOwner && joinRequests.length > 0 && (
+      {isOwner && safeJoinRequests.length > 0 && (
         <div className="mx-6 mt-4 p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
@@ -182,8 +187,8 @@ export default function CommunityPage() {
             </div>
             <div>
               <h4 className="text-sm font-bold text-white">
-                {joinRequests.length} Pending Member{' '}
-                {joinRequests.length === 1 ? 'Request' : 'Requests'}
+                {safeJoinRequests.length} Pending Member{' '}
+                {safeJoinRequests.length === 1 ? 'Request' : 'Requests'}
               </h4>
               <p className="text-xs text-amber-200/80">
                 New users have requested access to join this private community.
@@ -194,7 +199,7 @@ export default function CommunityPage() {
             onClick={() => setIsJoinRequestsModalOpen(true)}
             className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer"
           >
-            Review Applicants ({joinRequests.length})
+            Review Applicants ({safeJoinRequests.length})
           </button>
         </div>
       )}
@@ -295,12 +300,12 @@ export default function CommunityPage() {
                 <span className="h-2 w-2 rounded-full bg-green-400" /> Joined
                 Members
                 <span className="ml-1 text-sm font-normal text-gray-400">
-                  ({members.length})
+                  ({safeMembers.length})
                 </span>
               </h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {(members.length > 0
-                  ? members
+                {(safeMembers.length > 0
+                  ? safeMembers
                   : [
                       {
                         userId: currentUser?.id || 'me',

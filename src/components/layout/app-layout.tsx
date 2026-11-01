@@ -41,8 +41,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Initialize real-time connection and pending requests listeners
   useEffect(() => {
     if (currentUser?.id) {
-      const unsub = initConnectionListeners(currentUser.id);
-      const unsubPending = initUserPendingRequestsListener(currentUser.id);
+      const unsub = typeof initConnectionListeners === 'function' ? initConnectionListeners(currentUser.id) : undefined;
+      const unsubPending = typeof initUserPendingRequestsListener === 'function' ? initUserPendingRequestsListener(currentUser.id) : undefined;
       return () => {
         if (typeof unsub === "function") unsub();
         if (typeof unsubPending === "function") unsubPending();

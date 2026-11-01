@@ -72,6 +72,12 @@ export function MemberPanel() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+  const safeCommunityMembers = communityMembers || [];
+  const safeConnectedMembers = connectedMembers || [];
+  const safePendingCommunityIds = userPendingCommunityIds || [];
+  const safeJoinRequests = joinRequests || [];
+  const safeIncomingRequests = incomingRequests || [];
+
   // Check if currently viewing a community space
   const isInsideCommunity = !!pathname?.startsWith('/c/') && !!activeCommunity;
 
@@ -84,7 +90,7 @@ export function MemberPanel() {
   const isCommunityMember =
     isOwner ||
     (currentUser?.id
-      ? communityMembers.some((m) => m.userId === currentUser.id)
+      ? safeCommunityMembers.some((m) => m.userId === currentUser.id)
       : false);
 
   const isPrivateCommunity =
@@ -93,15 +99,15 @@ export function MemberPanel() {
 
   const isPendingCommunityJoin =
     !!activeCommunity &&
-    userPendingCommunityIds.includes(activeCommunity.id);
+    safePendingCommunityIds.includes(activeCommunity.id);
 
   // Build the member list depending on context
   let allDisplayMembers: DisplayMember[] = [];
 
   if (isInsideCommunity) {
     // Show members of this community
-    allDisplayMembers = communityMembers
-      .filter((cm) => cm.user)
+    allDisplayMembers = safeCommunityMembers
+      .filter((cm) => cm && cm.user)
       .map((cm) => {
         const isMe = cm.userId === currentUser?.id;
         const isAdmin =
@@ -153,14 +159,16 @@ export function MemberPanel() {
         ]
       : [];
 
-    const acceptedMembersList: DisplayMember[] = connectedMembers.map((cm) => ({
-      userId: cm.userId,
-      user: cm.user,
-      role: 'Connected Member',
-      roleColor: '#8b5cf6',
-      isMe: false,
-      isAdmin: false,
-    }));
+    const acceptedMembersList: DisplayMember[] = safeConnectedMembers
+      .filter((cm) => cm && cm.user)
+      .map((cm) => ({
+        userId: cm.userId,
+        user: cm.user,
+        role: 'Connected Member',
+        roleColor: '#8b5cf6',
+        isMe: false,
+        isAdmin: false,
+      }));
 
     allDisplayMembers = [...mySelfMember, ...acceptedMembersList];
   }
@@ -330,7 +338,7 @@ export function MemberPanel() {
           )}
 
           {isInsideCommunity ? (
-            isOwner && joinRequests.length > 0 && (
+            isOwner && safeJoinRequests.length > 0 && (
               <button
                 onClick={() => setIsJoinRequestsModalOpen(true)}
                 className="relative flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all shadow-sm cursor-pointer shrink-0 animate-pulse"
@@ -339,7 +347,7 @@ export function MemberPanel() {
                 <Shield size={13} />
                 <span>Requests</span>
                 <span className="w-4 h-4 rounded-full bg-amber-500 text-black text-[9px] font-bold flex items-center justify-center">
-                  {joinRequests.length}
+                  {safeJoinRequests.length}
                 </span>
               </button>
             )
@@ -351,9 +359,9 @@ export function MemberPanel() {
             >
               <UserPlus size={13} />
               <span>Connect</span>
-              {incomingRequests.length > 0 && (
+              {safeIncomingRequests.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
-                  {incomingRequests.length}
+                  {safeIncomingRequests.length}
                 </span>
               )}
             </button>
@@ -418,7 +426,7 @@ export function MemberPanel() {
           </>
         ) : (
           <>
-            {connectedMembers.length === 0 && (
+            {safeConnectedMembers.length === 0 && (
               <div className="p-4 mx-1 rounded-2xl bg-white/5 border border-white/5 text-center space-y-2 my-2">
                 <Lock size={20} className="mx-auto text-brand-400" />
                 <h4 className="text-xs font-bold text-white">

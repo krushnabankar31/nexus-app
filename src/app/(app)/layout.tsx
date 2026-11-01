@@ -15,9 +15,9 @@ export default function AppRootLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     setIsMounted(true);
-    const unsubAuth = initAuthListener();
-    const unsubCommunities = initCommunitiesListener();
-    const unsubMembers = initMembersListener();
+    const unsubAuth = typeof initAuthListener === 'function' ? initAuthListener() : () => {};
+    const unsubCommunities = typeof initCommunitiesListener === 'function' ? initCommunitiesListener() : () => {};
+    const unsubMembers = typeof initMembersListener === 'function' ? initMembersListener() : () => {};
 
     // Grace period to allow Zustand hydration and Firebase authState check
     const timer = setTimeout(() => {
@@ -26,9 +26,9 @@ export default function AppRootLayout({ children }: { children: React.ReactNode 
 
     return () => {
       clearTimeout(timer);
-      unsubAuth();
-      unsubCommunities();
-      unsubMembers();
+      if (typeof unsubAuth === 'function') unsubAuth();
+      if (typeof unsubCommunities === 'function') unsubCommunities();
+      if (typeof unsubMembers === 'function') unsubMembers();
     };
   }, [initAuthListener, initCommunitiesListener, initMembersListener]);
 
