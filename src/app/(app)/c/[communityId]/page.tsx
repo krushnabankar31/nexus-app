@@ -486,14 +486,6 @@ export default function CommunityPage() {
           </aside>
         </div>
       )}
-                    <span>{rule}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </aside>
-        </div>
-      )}
     </div>
   );
 }
