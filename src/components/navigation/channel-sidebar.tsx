@@ -346,7 +346,7 @@ export function ChannelSidebar() {
                       {name}
                     </div>
                     <div className="text-[11px] text-slate-400 truncate">
-                      {conv.lastMessage?.text || 'Direct Message'}
+                      {typeof conv.lastMessage === 'string' ? conv.lastMessage : (conv.lastMessage as any)?.text || (conv.lastMessage as any)?.content || 'Direct Message'}
                     </div>
                   </div>
                 </button>
