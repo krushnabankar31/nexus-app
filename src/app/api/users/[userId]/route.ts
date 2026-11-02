@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { USER_MAP, CURRENT_USER } from '@/lib/mock-data';
 import type { User } from '@nexus/types';
 
+export const dynamic = 'force-dynamic';
+
 // Allowed public profile fields
 const PUBLIC_PROFILE_KEYS: (keyof User)[] = [
   'id',
@@ -23,9 +25,10 @@ const PUBLIC_PROFILE_KEYS: (keyof User)[] = [
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  context: { params: { userId: string } }
 ) {
-  const { userId } = params;
+  const resolvedParams = await Promise.resolve(context.params);
+  const userId = resolvedParams?.userId;
 
   if (!userId) {
     return NextResponse.json({ error: 'User ID is required' }, { status: 400 });

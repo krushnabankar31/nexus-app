@@ -696,6 +696,7 @@ export default function CommunityPage() {
       {/* Report Modal */}
       {showReportModal && (
         <ReportModal
+          isOpen={showReportModal}
           targetId={community.id}
           targetName={community.name}
           targetType="community"
