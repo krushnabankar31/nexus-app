@@ -13,6 +13,7 @@ interface UiState {
   activeView: AppView;
   memberPanelOpen: boolean;
   channelSidebarOpen: boolean;
+  focusMode: boolean;
   mobileDrawerOpen: boolean;
   mobileDrawerContent: "community-rail" | "channel-sidebar" | "member-panel" | null;
   isMuted: boolean;
@@ -36,6 +37,8 @@ interface UiState {
   setMemberPanelOpen: (open: boolean) => void;
   toggleChannelSidebar: () => void;
   setChannelSidebarOpen: (open: boolean) => void;
+  toggleFocusMode: () => void;
+  setFocusMode: (on: boolean) => void;
   openMobileDrawer: (content: UiState["mobileDrawerContent"]) => void;
   closeMobileDrawer: () => void;
   toggleMute: () => void;
@@ -57,6 +60,7 @@ export const useUiStore = create<UiState>()(
         activeView: "community",
         memberPanelOpen: true,
         channelSidebarOpen: true,
+        focusMode: false,
         mobileDrawerOpen: false,
         mobileDrawerContent: null,
         isMuted: false,
@@ -95,6 +99,11 @@ export const useUiStore = create<UiState>()(
 
         setChannelSidebarOpen: (open) => set({ channelSidebarOpen: open }),
 
+        toggleFocusMode: () =>
+          set((s) => ({ focusMode: !s.focusMode })),
+
+        setFocusMode: (on) => set({ focusMode: on }),
+
         openMobileDrawer: (content) =>
           set({ mobileDrawerOpen: true, mobileDrawerContent: content }),
 
@@ -132,6 +141,7 @@ export const useUiStore = create<UiState>()(
           activeView: state.activeView,
           memberPanelOpen: state.memberPanelOpen,
           channelSidebarOpen: state.channelSidebarOpen,
+          focusMode: state.focusMode,
           isMuted: state.isMuted,
           isDeafened: state.isDeafened,
         }),

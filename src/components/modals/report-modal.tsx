@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flag, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { REPORT_REASONS, toggleMuteCommunity } from '@/lib/moderation';
+import { REPORT_REASONS, toggleMuteCommunity, hasRecentlyReported, recordReportSubmitted } from '@/lib/moderation';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuthStore } from '@/stores/auth-store';
@@ -31,10 +31,28 @@ export function ReportModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check duplicate rate limiting
+    if (hasRecentlyReported(targetId)) {
+      toast.error('You recently reported this item. Our safety team is actively reviewing it.');
+      onClose();
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (db) {
@@ -50,6 +68,7 @@ export function ReportModal({
           status: 'pending_review',
         });
       }
+      recordReportSubmitted(targetId);
       if (muteAfterReport && targetType === 'community') {
         toggleMuteCommunity(targetId);
       }
@@ -60,6 +79,7 @@ export function ReportModal({
         onClose();
       }, 1500);
     } catch (err) {
+      recordReportSubmitted(targetId);
       toast.success('Report submitted to safety team.');
       onClose();
     } finally {

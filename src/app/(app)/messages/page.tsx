@@ -19,6 +19,7 @@ export default function MessagesIndexPage() {
     initConversationsListener,
     isUsersLoading,
   } = useDMStore();
+  const { connectedMembers, setIsModalOpen: openConnectionModal } = useConnectionStore();
 
   const [search, setSearch] = useState('');
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
@@ -71,16 +72,19 @@ export default function MessagesIndexPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/5">
           <div className="flex items-center gap-2">
-            <MessageSquare size={18} className="text-brand-400" />
+            <MessageSquare size={18} className="text-indigo-400" />
             <h2 className="font-bold text-white text-sm">Direct Messages</h2>
           </div>
-          <button
-            onClick={() => setShowNewMessageModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors shadow-sm shadow-brand-500/20"
-            title="Start new direct message"
-          >
-            <Plus size={14} /> New DM
-          </button>
+          {filteredConversations.length > 0 && (
+            <button
+              onClick={() => setShowNewMessageModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shadow-sm cursor-pointer"
+              title="Start new direct message"
+              aria-label="Start new direct message"
+            >
+              <Plus size={14} /> New
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -92,7 +96,7 @@ export default function MessagesIndexPage() {
               placeholder="Filter conversations..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[hsl(var(--bg-sunken))] text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[hsl(var(--bg-sunken))] text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
         </div>
@@ -100,20 +104,14 @@ export default function MessagesIndexPage() {
         {/* DM List */}
         <div className="flex-1 overflow-y-auto px-2 space-y-1">
           {filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-brand-500/10 flex items-center justify-center mb-3">
-                <Users size={20} className="text-brand-400" />
+            <div className="flex flex-col items-center justify-center py-10 px-3 text-center">
+              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-2.5 text-indigo-400">
+                <MessageSquare size={18} />
               </div>
-              <p className="text-sm font-medium text-slate-300">No conversations yet</p>
-              <p className="text-xs text-slate-500 mt-1 mb-4">
-                Send a direct message to anyone in your community.
+              <p className="text-xs font-semibold text-slate-200">No active chats</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 max-w-[200px] leading-relaxed">
+                Your 1-on-1 direct messages will appear here.
               </p>
-              <button
-                onClick={() => setShowNewMessageModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors"
-              >
-                <Plus size={14} /> Start a conversation
-              </button>
             </div>
           ) : (
             filteredConversations.map((c) => {
@@ -169,20 +167,42 @@ export default function MessagesIndexPage() {
       </div>
 
       {/* Center Hero/Empty State */}
-      <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 text-center bg-[hsl(var(--bg-base))]">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-500/15 to-violet-500/15 border border-brand-500/20 flex items-center justify-center mb-5 shadow-xl">
-          <MessageSquare size={36} className="text-brand-400" />
-        </div>
-        <h2 className="text-xl font-bold text-white mb-2">Direct Messages</h2>
-        <p className="text-slate-400 text-sm max-w-sm mb-6 leading-relaxed">
-          Select an active conversation on the left, or click below to message anyone in your community.
-        </p>
-        <button
-          onClick={() => setShowNewMessageModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/20 hover:scale-105"
-        >
-          <Plus size={16} /> New Direct Message
-        </button>
+      <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 text-center bg-[#07080e]">
+        {connectedMembers.length === 0 && allUsers.length === 0 ? (
+          <div className="max-w-sm space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-950/40">
+              <Users size={28} />
+            </div>
+            <h2 className="text-xl font-bold text-white">Direct Messages</h2>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Connect with a member first to start a DM. Nexus protects member privacy through mutual connections.
+            </p>
+            <button
+              onClick={() => openConnectionModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-lg shadow-indigo-500/25 cursor-pointer min-h-[44px]"
+            >
+              <UserPlus size={15} />
+              <span>Find connections</span>
+            </button>
+          </div>
+        ) : (
+          <div className="max-w-sm space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-950/40">
+              <MessageSquare size={28} />
+            </div>
+            <h2 className="text-xl font-bold text-white">Direct Messages</h2>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Start a private, encrypted direct message with any of your trusted connections.
+            </p>
+            <button
+              onClick={() => setShowNewMessageModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-lg shadow-indigo-500/25 cursor-pointer min-h-[44px]"
+            >
+              <Plus size={15} />
+              <span>Start a conversation</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* New Message User Picker Modal */}

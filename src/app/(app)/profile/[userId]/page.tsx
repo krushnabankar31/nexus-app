@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   MessageSquare, Edit3, Calendar, Users, Shield, Crown,
@@ -150,13 +151,13 @@ function compressImage(file: File, maxDimension = 1200, quality = 0.75): Promise
 export default function UserProfilePage() {
   const router = useRouter();
   const params = useParams<{ userId: string }>();
-  const userId = params.userId;
+  const userId = params?.userId;
 
   const { user: currentUser, updateUser } = useAuthStore();
   const { communities } = useCommunityStore();
   const { startCall } = useCallStore();
 
-  const isOwn = !userId || userId === 'me' || userId === currentUser?.id;
+  const isOwn = !userId || userId === 'me' || userId === 'usr_me' || (currentUser?.id ? userId === currentUser.id : false);
 
   const [profileUser, setProfileUser] = useState<User | null>(isOwn ? currentUser : null);
   const [isLoading, setIsLoading] = useState(!isOwn);
@@ -435,8 +436,49 @@ export default function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[hsl(var(--bg-base))]">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="h-full overflow-y-auto bg-[#07080e] p-6 space-y-6 animate-pulse">
+        {/* Banner Skeleton */}
+        <div className="h-56 md:h-64 rounded-3xl bg-white/[0.04] border border-white/[0.06] w-full" />
+        <div className="max-w-5xl mx-auto px-4 space-y-4">
+          <div className="flex items-end justify-between -mt-16">
+            <div className="w-28 h-28 rounded-3xl bg-white/[0.08] border-4 border-[#07080e]" />
+            <div className="w-32 h-10 rounded-2xl bg-white/[0.06]" />
+          </div>
+          <div className="w-48 h-6 rounded-lg bg-white/[0.06] mt-4" />
+          <div className="w-72 h-4 rounded-lg bg-white/[0.04]" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+            <div className="h-48 rounded-2xl bg-white/[0.03] border border-white/[0.05]" />
+            <div className="md:col-span-2 h-48 rounded-2xl bg-white/[0.03] border border-white/[0.05]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-[#07080e] p-6 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 shadow-lg">
+          <Shield size={26} />
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2">Profile Unavailable</h2>
+        <p className="text-sm text-slate-400 max-w-sm mb-6 leading-relaxed">
+          We couldn't load this profile. The member may have changed their privacy settings, or your connection was interrupted.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push('/discover')}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md cursor-pointer min-h-[44px]"
+          >
+            Back to Discover
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold border border-white/10 transition-all cursor-pointer min-h-[44px]"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

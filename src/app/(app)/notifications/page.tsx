@@ -16,6 +16,8 @@ import {
   CheckCheck,
   Trash2,
   ExternalLink,
+  Settings,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useConnectionStore } from '@/stores/connection-store';
@@ -36,6 +38,26 @@ export default function NotificationsPage() {
 
   const [activeTab, setActiveTab] = useState<'all' | 'requests' | 'communities' | 'system'>('all');
   const [clearedMockIds, setClearedMockIds] = useState<string[]>([]);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [prefs, setPrefs] = useState({
+    dms: true,
+    mentions: true,
+    community: true,
+    connections: true,
+    security: true, // locked / enabled by default for safety
+  });
+
+  const togglePref = (key: keyof typeof prefs) => {
+    if (key === 'security') {
+      toast('Security alerts must remain enabled for account safety.', { icon: '🔒' });
+      return;
+    }
+    setPrefs((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      toast.success(`${key.toUpperCase()} notifications ${updated[key] ? 'enabled' : 'muted'}`);
+      return updated;
+    });
+  };
 
   // System & mock activity notifications
   const systemNotifications = [
@@ -84,12 +106,29 @@ export default function NotificationsPage() {
   const allNotificationsCount = totalRequests + systemNotifications.length + communityNotices.length;
 
   const handleMarkAllRead = () => {
-    toast.success('All notifications marked as read');
+    toast.success('All notifications marked as read', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          toast.success('Notification status restored');
+        },
+      },
+    });
   };
 
   const handleClearAll = () => {
-    setClearedMockIds([...clearedMockIds, ...systemNotifications.map((n) => n.id), ...communityNotices.map((n) => n.id)]);
-    toast.success('Notification feed cleared');
+    const prevCleared = [...clearedMockIds];
+    const allIds = [...systemNotifications.map((n) => n.id), ...communityNotices.map((n) => n.id)];
+    setClearedMockIds([...prevCleared, ...allIds]);
+    toast.success('Notification feed cleared', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          setClearedMockIds(prevCleared);
+          toast.success('Notifications restored');
+        },
+      },
+    });
   };
 
   return (
@@ -116,7 +155,17 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowPreferences((p) => !p)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                showPreferences
+                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08]'
+              }`}
+            >
+              <Settings size={14} /> Preferences
+            </button>
             <button
               onClick={handleMarkAllRead}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 border border-white/[0.08] transition-all cursor-pointer"
@@ -131,6 +180,55 @@ export default function NotificationsPage() {
             </button>
           </div>
         </div>
+
+        {/* Notification Preferences Drawer / Card */}
+        {showPreferences && (
+          <div className="p-5 rounded-3xl bg-[#0f101f] border border-indigo-500/30 shadow-2xl space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <Settings size={16} className="text-indigo-400" />
+                <h3 className="text-sm font-bold text-white">Alert & Notification Preferences</h3>
+              </div>
+              <span className="text-[11px] text-slate-400">Saved automatically</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              {[
+                { key: 'dms' as const, label: 'Direct Messages', desc: 'Private messages from connections' },
+                { key: 'mentions' as const, label: 'Mentions & Replies', desc: 'When tagged in channels' },
+                { key: 'community' as const, label: 'Community Activity', desc: 'Announcements and events' },
+                { key: 'connections' as const, label: 'Connection Requests', desc: 'Incoming friendship requests' },
+                { key: 'security' as const, label: 'Security Alerts', desc: 'Logins, 2FA, policy updates', locked: true },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  onClick={() => togglePref(item.key)}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                    prefs[item.key]
+                      ? 'bg-white/[0.04] border-indigo-500/40 text-white'
+                      : 'bg-white/[0.01] border-white/[0.06] text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-xs text-white">{item.label}</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        item.locked
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : prefs[item.key]
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                          : 'bg-white/5 text-slate-500'
+                      }`}
+                    >
+                      {item.locked ? 'Always On' : prefs[item.key] ? 'Enabled' : 'Muted'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Tab Filters */}
         <div className="flex items-center gap-2 border-b border-white/[0.06] pb-3 overflow-x-auto scrollbar-none">

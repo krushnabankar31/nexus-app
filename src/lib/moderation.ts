@@ -74,10 +74,37 @@ export function toggleMuteCommunity(communityId: string): boolean {
 
 // ─── Report Reason Options ───────────────────────────────────────────────────
 export const REPORT_REASONS = [
-  { id: 'hate_speech', label: 'Hate speech or derogatory slurs' },
-  { id: 'harassment', label: 'Harassment or personal attacks' },
-  { id: 'inappropriate_name', label: 'Inappropriate or abusive name' },
-  { id: 'spam', label: 'Spam, scams, or malicious links' },
-  { id: 'illegal_content', label: 'Illegal or dangerous content' },
-  { id: 'other', label: 'Other violation of Community Guidelines' },
+  { id: 'harassment_hate', label: 'Harassment or hate speech' },
+  { id: 'spam_scam', label: 'Spam/scam' },
+  { id: 'explicit_inappropriate', label: 'Explicit/inappropriate content' },
+  { id: 'impersonation', label: 'Impersonation' },
+  { id: 'other', label: 'Other' },
 ] as const;
+
+// ─── Rate Limiting & Duplicate Report Prevention ─────────────────────────────
+const REPORTED_CACHE_KEY = 'nexus_reported_cache';
+
+export function hasRecentlyReported(targetId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem(REPORTED_CACHE_KEY);
+    if (!raw) return false;
+    const cache = JSON.parse(raw);
+    const timestamp = cache[targetId];
+    if (!timestamp) return false;
+    // 15 minutes cooldown to prevent spam / accidental duplicate reports
+    return Date.now() - timestamp < 15 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+export function recordReportSubmitted(targetId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(REPORTED_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[targetId] = Date.now();
+    localStorage.setItem(REPORTED_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}

@@ -699,7 +699,7 @@ const Footer = () => (
             {[
               { label: 'About Nexus', href: '#features' },
               { label: 'Communities', href: '/discover' },
-              { label: 'Security & Telemetry', href: '/status' },
+              { label: 'Security Center', href: '/security' },
               { label: 'Contact Support', href: 'mailto:support@nexus.app' },
             ].map(l => (
               <li key={l.label}>
