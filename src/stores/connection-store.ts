@@ -56,8 +56,11 @@ interface ConnectionState {
   connectedUserIds: string[];
   isLoading: boolean;
   isModalOpen: boolean;
+  modalInitialTab: 'requests' | 'discover' | 'connected';
 
   setIsModalOpen: (open: boolean) => void;
+  setModalInitialTab: (tab: 'requests' | 'discover' | 'connected') => void;
+  openModalWithTab: (tab: 'requests' | 'discover' | 'connected') => void;
   initConnectionListeners: (currentUserId: string) => () => void;
   sendConnectionRequest: (sender: User, receiver: User) => Promise<boolean>;
   acceptConnectionRequest: (request: ConnectionRequest, currentUser: User) => Promise<boolean>;
@@ -74,8 +77,11 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => ({
   connectedUserIds: [],
   isLoading: true,
   isModalOpen: false,
+  modalInitialTab: 'requests',
 
   setIsModalOpen: (open: boolean) => set({ isModalOpen: open }),
+  setModalInitialTab: (tab: 'requests' | 'discover' | 'connected') => set({ modalInitialTab: tab }),
+  openModalWithTab: (tab: 'requests' | 'discover' | 'connected') => set({ isModalOpen: true, modalInitialTab: tab }),
 
   initConnectionListeners: (currentUserId: string) => {
     if (!isFirebaseConfigured() || !db || !currentUserId) {

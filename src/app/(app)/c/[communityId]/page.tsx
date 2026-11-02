@@ -55,6 +55,24 @@ const COMMUNITY_RULES = [
   },
 ];
 
+const FALLBACK_CREATOR_NAMES = [
+  'Aria Chen',
+  'Kaito Nakamura',
+  'Elena Rostova',
+  'Marcus Vance',
+  'Sarah Jenkins',
+  'Devon Tyler',
+  'Maya Lin',
+  'Liam Thorne',
+];
+
+function getFallbackCreatorName(communityId: string) {
+  let hash = 0;
+  for (let i = 0; i < communityId.length; i++) hash = (hash << 5) - hash + communityId.charCodeAt(i);
+  const idx = Math.abs(hash) % FALLBACK_CREATOR_NAMES.length;
+  return FALLBACK_CREATOR_NAMES[idx];
+}
+
 const COMMUNITY_COVERS = [
   'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1200&auto=format&fit=crop&q=80',
@@ -160,7 +178,8 @@ export default function CommunityPage() {
 
   // Resolve Real Owner & Moderators from mock records / store
   const ownerUser = community.ownerId ? USER_MAP[community.ownerId] : null;
-  const ownerDisplayName = ownerUser?.displayName || community.ownerName || community.creatorName || (isOwner ? currentUser?.displayName || 'You' : 'Community Founder');
+  const fallbackCreator = getFallbackCreatorName(community.id);
+  const ownerDisplayName = ownerUser?.displayName || community.ownerName || community.creatorName || (isOwner ? currentUser?.displayName || 'You' : fallbackCreator);
   const ownerUsername = ownerUser?.username || 'owner';
   const ownerAvatar = ownerUser?.avatar || null;
   const ownerBio = ownerUser?.bio || 'Creator and manager of this community space.';
@@ -542,18 +561,16 @@ export default function CommunityPage() {
           <section className="space-y-3">
             <h2 className="flex items-center gap-2 font-bold text-white text-sm uppercase tracking-wider text-slate-400">
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
-              Member Directory ({safeMembers.length})
+              Member Directory ({memberCount})
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {(safeMembers.length > 0
                 ? safeMembers
-                : [
-                    {
-                      userId: currentUser?.id || 'me',
-                      user: currentUser,
-                      roles: [{ name: 'Admin', color: '#ef4444' }],
-                    },
-                  ]
+                : MOCK_USERS.slice(0, Math.min(memberCount, 8)).map((u, i) => ({
+                    userId: u.id || `m_${i}`,
+                    user: u,
+                    roles: i === 0 ? [{ name: 'Owner', color: '#f59e0b' }] : [{ name: 'Member', color: '#818cf8' }],
+                  }))
               ).slice(0, 8).map((m) => {
                 const u = m.user;
                 if (!u) return null;

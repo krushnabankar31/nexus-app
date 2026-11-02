@@ -197,6 +197,9 @@ export default function SettingsPage() {
             localStorage.removeItem(`nexus_onboarding_dismissed_${uid}`);
             localStorage.removeItem('nexus_onboarding_dismissed');
             localStorage.setItem(`nexus_visit_count_${uid}`, '1');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new Event('nexus_onboarding_reset'));
+            }
             setOnboardingResetToast(true);
             setTimeout(() => setOnboardingResetToast(false), 4000);
           }}

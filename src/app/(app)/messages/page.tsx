@@ -8,6 +8,7 @@ import { useDMStore, getConversationId } from '@/stores/dm-store';
 import { useConnectionStore } from '@/stores/connection-store';
 import { cn, getInitials, formatTime, getUserEffectiveStatus } from '@/lib/utils';
 import type { User } from '@nexus/types';
+import toast from 'react-hot-toast';
 
 export default function MessagesIndexPage() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function MessagesIndexPage() {
     initConversationsListener,
     isUsersLoading,
   } = useDMStore();
-  const { connectedMembers, setIsModalOpen: openConnectionModal } = useConnectionStore();
+  const { connectedMembers, openModalWithTab } = useConnectionStore();
 
   const [search, setSearch] = useState('');
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
@@ -133,7 +134,10 @@ export default function MessagesIndexPage() {
                       Connect with a member first to start a DM.
                     </p>
                     <button
-                      onClick={() => openConnectionModal(true)}
+                      onClick={() => {
+                        openModalWithTab('discover');
+                        toast.success('Opening member discovery...', { id: 'disc-toast' });
+                      }}
                       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px]"
                     >
                       <UserPlus size={15} />
@@ -226,7 +230,10 @@ export default function MessagesIndexPage() {
               Connect with a member first to start a DM. Nexus protects member privacy through mutual connections.
             </p>
             <button
-              onClick={() => openConnectionModal(true)}
+              onClick={() => {
+                openModalWithTab('discover');
+                toast.success('Opening member discovery...', { id: 'disc-toast' });
+              }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-lg shadow-indigo-500/25 cursor-pointer min-h-[44px]"
             >
               <UserPlus size={15} />

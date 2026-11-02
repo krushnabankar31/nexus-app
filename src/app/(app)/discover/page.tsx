@@ -30,6 +30,7 @@ import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
 import { ReportModal } from '@/components/modals/report-modal';
+import { CommunityDetailsModal } from '@/components/modals/community-details-modal';
 import { OnboardingChecklist } from '@/components/onboarding/onboarding-checklist';
 import {
   containsProfanityOrSlur,
@@ -65,6 +66,17 @@ const COMMUNITY_COVERS = [
   'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80',
 ];
 
+const FALLBACK_CREATOR_NAMES = [
+  'Aria Chen',
+  'Kaito Nakamura',
+  'Elena Rostova',
+  'Marcus Vance',
+  'Sarah Jenkins',
+  'Devon Tyler',
+  'Maya Lin',
+  'Liam Thorne',
+];
+
 function getCoverImage(community: { id: string; name?: string; banner?: string | null }) {
   if (community.banner && !community.banner.includes('photo-1618005182384-a83a8bd57fbe')) {
     return community.banner;
@@ -86,11 +98,22 @@ function fmtNum(n: number) {
   return String(n);
 }
 
-function getCommunitySampleMembers(communityId: string) {
+// Consistent member avatar list matching exact memberCount
+function getCommunitySampleMembers(community: any) {
+  const memberCount = community.memberCount ?? 1;
+  const maxAvatars = Math.min(memberCount, 3);
+  let hash = 0;
+  const seed = community.id || 'nexus';
+  for (let i = 0; i < seed.length; i++) hash = (hash << 5) - hash + seed.charCodeAt(i);
+  const startIdx = Math.abs(hash) % Math.max(1, MOCK_USERS.length - 3);
+  return MOCK_USERS.slice(startIdx, startIdx + maxAvatars);
+}
+
+function getFallbackCreatorName(communityId: string) {
   let hash = 0;
   for (let i = 0; i < communityId.length; i++) hash = (hash << 5) - hash + communityId.charCodeAt(i);
-  const startIdx = Math.abs(hash) % Math.max(1, MOCK_USERS.length - 3);
-  return MOCK_USERS.slice(startIdx, startIdx + 3);
+  const idx = Math.abs(hash) % FALLBACK_CREATOR_NAMES.length;
+  return FALLBACK_CREATOR_NAMES[idx];
 }
 
 function getRelativeActivity(communityId: string) {
@@ -102,17 +125,18 @@ function getRelativeActivity(communityId: string) {
 
 function CommunityCard({
   community,
+  onView,
   onReport,
   onHide,
 }: {
   community: any;
+  onView: (c: any) => void;
   onReport: (c: any) => void;
   onHide: (c: any) => void;
 }) {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
   const {
-    setActiveCommunity,
     joinedCommunityIds,
     userPendingCommunityIds,
     joinPublicCommunity,
@@ -124,20 +148,24 @@ function CommunityCard({
   const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
   const isPending = (userPendingCommunityIds || []).includes(community.id);
   const coverUrl = getCoverImage(community);
-  const isFresh = (community.memberCount || 1) <= 3;
 
   // Real owner lookup from mock registry / store
   const owner = community.ownerId ? USER_MAP[community.ownerId] : null;
-  const creatorName = owner?.displayName || owner?.username || community.ownerName || community.creatorName || (isFresh ? 'Community Founder' : 'Nexus Creator');
+  const creatorName =
+    owner?.displayName ||
+    owner?.username ||
+    community.ownerName ||
+    community.creatorName ||
+    (isOwner ? currentUser?.displayName || 'You' : getFallbackCreatorName(community.id));
   const creatorAvatar = owner?.avatar || community.ownerAvatar || null;
   const channelCount = community.channelCount || (community.category === 'gaming' ? 12 : community.category === 'technology' ? 9 : community.category === 'art' ? 8 : 6);
-  const sampleMembers = getCommunitySampleMembers(community.id);
+  const sampleMembers = getCommunitySampleMembers(community);
   const relativeActivity = getRelativeActivity(community.id);
   const createdDateFormatted = community.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Est. 2026';
+  const totalMemberCount = community.memberCount ?? 1;
 
-  const handleClick = () => {
-    setActiveCommunity(community);
-    router.push(`/c/${community.id}`);
+  const handleCardClick = () => {
+    onView(community);
   };
 
   const handleAction = async (e: React.MouseEvent) => {
@@ -147,7 +175,7 @@ function CommunityCard({
       return;
     }
     if (isJoined) {
-      handleClick();
+      onView(community);
       return;
     }
     if (isPrivate) {
@@ -162,12 +190,12 @@ function CommunityCard({
 
   return (
     <article
-      onClick={handleClick}
+      onClick={handleCardClick}
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleClick();
+          handleCardClick();
         }
       }}
       className="group relative rounded-2xl overflow-hidden border border-white/[0.08] hover:border-indigo-500/40 bg-[#0f101f]/80 backdrop-blur-md cursor-pointer transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-950/50 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
@@ -253,10 +281,10 @@ function CommunityCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleClick();
+                  onView(community);
                 }}
-                aria-label={`View ${community.name}`}
-                className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400"
+                aria-label={`View ${community.name} details`}
+                className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400 flex items-center gap-1"
               >
                 View
               </button>
@@ -341,17 +369,17 @@ function CommunityCard({
           </p>
         </div>
 
-        {/* Member Avatars & Detailed Signals Footer */}
+        {/* Member Avatars & Detailed Signals Footer (Strictly consistent with member count) */}
         <div className="pt-2.5 mt-2.5 border-t border-white/[0.06] space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-300">
             <span className="flex items-center gap-1.5 text-slate-200 font-medium">
               <Users size={13} className="text-indigo-400" aria-hidden="true" />
-              {fmtNum(community.memberCount ?? 1)}{' '}
-              {(community.memberCount ?? 1) === 1 ? 'member' : 'members'}
+              {fmtNum(totalMemberCount)}{' '}
+              {totalMemberCount === 1 ? 'member' : 'members'}
             </span>
 
-            {/* 2-3 Real Member Avatars with tooltips */}
-            <div className="flex items-center -space-x-1.5 shrink-0" title="Active community members">
+            {/* Exactly consistent member avatars */}
+            <div className="flex items-center -space-x-1.5 shrink-0" title={`${sampleMembers.length} active member preview`}>
               {sampleMembers.map((m, idx) => (
                 <div
                   key={m.id || idx}
@@ -367,6 +395,11 @@ function CommunityCard({
                   )}
                 </div>
               ))}
+              {totalMemberCount > sampleMembers.length && (
+                <span className="text-[10px] text-slate-400 pl-2">
+                  +{totalMemberCount - sampleMembers.length}
+                </span>
+              )}
             </div>
           </div>
 
@@ -462,13 +495,38 @@ export default function DiscoverPage() {
   const [sortBy, setSortBy] = useState<'recommended' | 'active' | 'newest' | 'largest'>('recommended');
   const [mutedIds, setMutedIds] = useState<string[]>([]);
   const [reportTarget, setReportTarget] = useState<any | null>(null);
+  const [selectedDetailsCommunity, setSelectedDetailsCommunity] = useState<any | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
+  // Load muted IDs and saved sort preference
   useEffect(() => {
     setMutedIds(getMutedCommunityIds());
+    if (typeof window !== 'undefined') {
+      const savedSort = localStorage.getItem('nexus_discover_sort') as any;
+      if (savedSort && ['recommended', 'active', 'newest', 'largest'].includes(savedSort)) {
+        setSortBy(savedSort);
+      }
+    }
   }, []);
+
+  const handleOpenDetails = (c: any) => {
+    setSelectedDetailsCommunity(c);
+    setIsDetailsModalOpen(true);
+    toast.success(`Opening details for ${c.name}...`, { id: 'view-community-toast', duration: 1800 });
+    setLiveAnnouncement(`Viewing details for ${c.name}`);
+  };
+
+  const handleSortChange = (newSort: 'recommended' | 'active' | 'newest' | 'largest', label: string) => {
+    setSortBy(newSort);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nexus_discover_sort', newSort);
+    }
+    toast.success(`Sorted by: ${label}`, { id: 'sort-toast', icon: '🔄' });
+    setLiveAnnouncement(`Sorted communities by ${label}`);
+  };
 
   const handleHideCommunity = (c: any) => {
     toggleMuteCommunity(c.id);
@@ -543,6 +601,7 @@ export default function DiscoverPage() {
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {liveAnnouncement}
       </div>
+
       {/* Hero Section with Ambient Midnight-Violet Lighting */}
       <div className="relative overflow-hidden pt-12 pb-8 px-4 sm:px-6">
         <div className="absolute top-0 left-1/3 w-[500px] h-[350px] bg-indigo-600/15 rounded-full blur-[130px] pointer-events-none" />
@@ -663,10 +722,14 @@ export default function DiscoverPage() {
             </h2>
           </div>
 
-          {/* Sorting Options */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          {/* Semantic Radio Group for Sorting */}
+          <div
+            role="radiogroup"
+            aria-label="Sort communities"
+            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none"
+          >
             <span className="text-xs text-slate-400 font-semibold mr-1 flex items-center gap-1">
-              <SlidersHorizontal size={12} />
+              <SlidersHorizontal size={12} aria-hidden="true" />
               <span>Sort:</span>
             </span>
             {[
@@ -674,23 +737,24 @@ export default function DiscoverPage() {
               { id: 'active' as const, label: 'Most Active' },
               { id: 'newest' as const, label: 'Newest' },
               { id: 'largest' as const, label: 'Largest' },
-            ].map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  setSortBy(s.id);
-                  toast.success(`Sorted by: ${s.label}`, { id: 'sort-toast', icon: '🔄' });
-                  setLiveAnnouncement(`Sorted communities by ${s.label}`);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap min-h-[36px] ${
-                  sortBy === s.id
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-white/[0.04] text-slate-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+            ].map((s) => {
+              const isSelected = sortBy === s.id;
+              return (
+                <button
+                  key={s.id}
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => handleSortChange(s.id, s.label)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap min-h-[36px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-white/20'
+                      : 'bg-white/[0.04] text-slate-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -729,6 +793,7 @@ export default function DiscoverPage() {
               <CommunityCard
                 key={c.id}
                 community={c}
+                onView={handleOpenDetails}
                 onReport={(target) => setReportTarget(target)}
                 onHide={handleHideCommunity}
               />
@@ -756,6 +821,16 @@ export default function DiscoverPage() {
           </div>
         </section>
       </div>
+
+      {/* Community Details Modal */}
+      {selectedDetailsCommunity && (
+        <CommunityDetailsModal
+          isOpen={isDetailsModalOpen}
+          community={selectedDetailsCommunity}
+          onClose={() => setIsDetailsModalOpen(false)}
+          onHideCommunity={handleHideCommunity}
+        />
+      )}
 
       {/* Safety Report Modal */}
       {reportTarget && (

@@ -22,6 +22,7 @@ import { useCommunityStore } from '@/stores/community-store';
 import { useConnectionStore } from '@/stores/connection-store';
 import { useDMStore } from '@/stores/dm-store';
 import { useUiStore } from '@/stores/ui-store';
+import toast from 'react-hot-toast';
 
 export function OnboardingChecklist() {
   const router = useRouter();
@@ -46,6 +47,13 @@ export function OnboardingChecklist() {
       setIsDismissed(false);
     }
 
+    // Listen for custom reset event from Settings
+    const handleReset = () => {
+      setIsDismissed(false);
+      setIsCompact(false);
+    };
+    window.addEventListener('nexus_onboarding_reset', handleReset);
+
     // Track visit count per user
     const visits = parseInt(localStorage.getItem(VISITS_KEY) || '0', 10);
     const newVisits = visits + 1;
@@ -53,6 +61,8 @@ export function OnboardingChecklist() {
     if (newVisits >= 3) {
       setIsCompact(true);
     }
+
+    return () => window.removeEventListener('nexus_onboarding_reset', handleReset);
   }, [DISMISSED_KEY, VISITS_KEY]);
 
   if (!mounted || isDismissed) return null;
@@ -127,9 +137,13 @@ export function OnboardingChecklist() {
   const handleDismiss = () => {
     localStorage.setItem(DISMISSED_KEY, 'true');
     setIsDismissed(true);
+    toast('Onboarding checklist dismissed. Reopen anytime from Settings.', {
+      icon: 'ℹ️',
+      id: 'onboard-dismiss-toast',
+    });
   };
 
-  // Compact Mode Progress Card (Shown after multiple visits or toggled)
+  // Compact Mode Progress Card (Shown when collapsed or after multiple visits)
   if (isCompact) {
     return (
       <div className="relative rounded-2xl p-4 bg-gradient-to-r from-indigo-950/40 via-violet-950/30 to-[#0f101f] border border-indigo-500/25 shadow-xl backdrop-blur-xl mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -139,9 +153,9 @@ export function OnboardingChecklist() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white">Getting Started</span>
+              <span className="text-xs font-bold text-white">Getting Started: {completedCount}/{steps.length}</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
-                {completedCount} of {steps.length} done
+                {progressPercent}%
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-sm">
