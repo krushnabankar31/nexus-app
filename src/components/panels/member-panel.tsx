@@ -19,8 +19,10 @@ import {
   Check,
   Clock,
   Sparkles,
+  PanelRightClose,
 } from 'lucide-react';
 import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
+import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useConnectionStore } from '@/stores/connection-store';
 import { useCommunityStore } from '@/stores/community-store';
@@ -48,6 +50,7 @@ export function MemberPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const { user: currentUser } = useAuthStore();
+  const { toggleMemberPanel } = useUiStore();
   const { startCall } = useCallStore();
 
   const {
@@ -367,6 +370,15 @@ export function MemberPanel() {
               )}
             </button>
           )}
+
+          <button
+            onClick={toggleMemberPanel}
+            aria-label="Collapse member panel"
+            title="Collapse member panel"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+          >
+            <PanelRightClose size={15} aria-hidden="true" />
+          </button>
         </div>
 
         {/* Search */}
@@ -427,19 +439,19 @@ export function MemberPanel() {
         ) : (
           <>
             {safeConnectedMembers.length === 0 && (
-              <div className="p-5 mx-1 rounded-2xl bg-gradient-to-b from-indigo-500/10 to-transparent border border-indigo-500/20 text-center space-y-2.5 my-3 shadow-inner">
-                <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                  <Lock size={18} />
+              <div className="p-3 mx-1 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-center space-y-1.5 my-2">
+                <div className="flex items-center justify-center gap-1.5 text-indigo-400 text-xs font-semibold">
+                  <Lock size={13} aria-hidden="true" />
+                  <span>Private Connections</span>
                 </div>
-                <h4 className="text-xs font-bold text-white">Private Network</h4>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Your profile and connections are private. Discover and connect with other members.
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Your profile and connections are 100% private. Connect with trusted members to chat and collaborate.
                 </p>
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white text-xs font-semibold shadow-md shadow-indigo-500/25 transition-all cursor-pointer"
+                  className="py-1 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 hover:text-white text-xs font-medium transition-all cursor-pointer border border-indigo-500/30 min-h-[32px]"
                 >
-                  + Find Connections
+                  + Add Connection
                 </button>
               </div>
             )}

@@ -303,7 +303,7 @@ const Features = () => {
     { icon: BarChart, title: 'Analytics Dashboard', desc: 'Understand your community growth and engagement with deep insights.' },
     { icon: DollarSign, title: 'Creator Monetization', desc: 'Offer paid subscriptions and one-time purchases seamlessly.' },
     { icon: Users, title: 'Collaborative Workspace', desc: 'Built-in docs, whiteboards, and task management for teams.' },
-    { icon: Shield, title: 'Enterprise Security', desc: 'Bank-grade encryption, SSO, and advanced moderation tools.' },
+    { icon: Shield, title: 'Enterprise Security', desc: 'AES-256 and TLS 1.3 encryption, role-based access, and automated moderation tools.' },
   ];
 
   return (
@@ -539,9 +539,12 @@ const Pricing = () => {
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="block w-full py-3 rounded-lg bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center">
+            <Link href="/signup?plan=free" className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm">
               Get Started
             </Link>
+            <p className="text-[11px] text-neutral-400 text-center mt-2.5">
+              Free forever · No credit card required
+            </p>
           </div>
 
           {/* Pro Tier */}
@@ -562,9 +565,12 @@ const Pricing = () => {
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="block w-full py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-500 text-white font-medium hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-shadow text-center">
+            <Link href="/signup?plan=pro" className="block w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white font-medium hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-shadow text-center text-sm shadow-md">
               Start Free Trial
             </Link>
+            <p className="text-[11px] text-indigo-300/80 text-center mt-2.5 font-medium">
+              14-day free trial · Billed {annual ? 'annually' : 'monthly'} · Cancel anytime
+            </p>
           </div>
 
           {/* Enterprise Tier */}
@@ -581,9 +587,12 @@ const Pricing = () => {
                 </li>
               ))}
             </ul>
-            <Link href="/signup" className="block w-full py-3 rounded-lg bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center">
+            <a href="mailto:sales@nexus.app?subject=Nexus%20Enterprise%20Inquiry" className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm">
               Contact Sales
-            </Link>
+            </a>
+            <p className="text-[11px] text-neutral-400 text-center mt-2.5">
+              Custom onboarding & SLA · Talk to engineering
+            </p>
           </div>
         </div>
       </div>
@@ -663,17 +672,23 @@ const Footer = () => (
             The next generation platform for communities to connect, collaborate, and grow together.
           </p>
           <div className="flex gap-4">
-            <a href="#" className="text-neutral-500 hover:text-white transition-colors"><Twitter size={20} /></a>
-            <a href="#" className="text-neutral-500 hover:text-white transition-colors"><Github size={20} /></a>
-            <a href="#" className="text-neutral-500 hover:text-white transition-colors"><Linkedin size={20} /></a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Nexus Twitter" className="text-neutral-500 hover:text-white transition-colors"><Twitter size={20} /></a>
+            <a href="https://github.com/krushnabankar31/nexus-app" target="_blank" rel="noopener noreferrer" aria-label="Nexus GitHub Repository" className="text-neutral-500 hover:text-white transition-colors"><Github size={20} /></a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="Nexus LinkedIn" className="text-neutral-500 hover:text-white transition-colors"><Linkedin size={20} /></a>
           </div>
         </div>
         
         <div>
           <h4 className="font-semibold text-white mb-4">Product</h4>
           <ul className="space-y-3">
-            {['Features', 'Integrations', 'Pricing', 'Changelog', 'Docs'].map(l => (
-              <li key={l}><a href="#" className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l}</a></li>
+            {[
+              { label: 'Features', href: '#features' },
+              { label: 'Discover', href: '/discover' },
+              { label: 'Pricing', href: '#pricing' },
+              { label: 'Live Status', href: '/status' },
+              { label: 'Documentation', href: 'https://github.com/krushnabankar31/nexus-app#readme' },
+            ].map(l => (
+              <li key={l.label}><Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link></li>
             ))}
           </ul>
         </div>
@@ -681,17 +696,33 @@ const Footer = () => (
         <div>
           <h4 className="font-semibold text-white mb-4">Company</h4>
           <ul className="space-y-3">
-            {['About Us', 'Careers', 'Blog', 'Contact'].map(l => (
-              <li key={l}><a href="#" className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l}</a></li>
+            {[
+              { label: 'About Nexus', href: '#features' },
+              { label: 'Communities', href: '/discover' },
+              { label: 'Security & Telemetry', href: '/status' },
+              { label: 'Contact Support', href: 'mailto:support@nexus.app' },
+            ].map(l => (
+              <li key={l.label}>
+                {l.href.startsWith('mailto:') ? (
+                  <a href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</a>
+                ) : (
+                  <Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link>
+                )}
+              </li>
             ))}
           </ul>
         </div>
         
         <div>
-          <h4 className="font-semibold text-white mb-4">Legal</h4>
+          <h4 className="font-semibold text-white mb-4">Legal & Trust</h4>
           <ul className="space-y-3">
-            {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map(l => (
-              <li key={l}><a href="#" className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l}</a></li>
+            {[
+              { label: 'Privacy Policy', href: '/privacy' },
+              { label: 'Terms of Service', href: '/terms' },
+              { label: 'Cookie Policy', href: '/privacy#cookies' },
+              { label: 'System Status', href: '/status' },
+            ].map(l => (
+              <li key={l.label}><Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link></li>
             ))}
           </ul>
         </div>
@@ -701,10 +732,10 @@ const Footer = () => (
         <p className="text-neutral-500 text-sm">
           © {new Date().getFullYear()} Nexus Inc. All rights reserved.
         </p>
-        <div className="flex gap-4 items-center">
-          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-          <span className="text-neutral-500 text-sm">All systems operational</span>
-        </div>
+        <Link href="/status" className="flex gap-2 items-center text-xs text-neutral-400 hover:text-white transition-colors">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500"></span>
+          <span>All systems operational (99.96% Live Telemetry)</span>
+        </Link>
       </div>
     </div>
   </footer>

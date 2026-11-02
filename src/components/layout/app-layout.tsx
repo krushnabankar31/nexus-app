@@ -6,7 +6,9 @@
 // Mobile:  ContentArea with bottom nav + sheet drawers
 
 import React, { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { PanelLeftOpen } from "lucide-react";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useConnectionStore } from "@/stores/connection-store";
@@ -27,12 +29,20 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const pathname = usePathname();
   const {
     memberPanelOpen,
+    channelSidebarOpen,
+    toggleChannelSidebar,
     mobileDrawerOpen,
     mobileDrawerContent,
     closeMobileDrawer,
   } = useUiStore();
+
+  const isDiscover = pathname === '/discover';
+  const isNotifications = pathname === '/notifications';
+  const isProfile = pathname?.startsWith('/profile');
+  const showMemberPanel = memberPanelOpen && !isDiscover && !isNotifications && !isProfile;
 
   const { user: currentUser } = useAuthStore();
   const { initConnectionListeners } = useConnectionStore();
@@ -81,23 +91,45 @@ export function AppLayout({ children }: AppLayoutProps) {
           <CommunityRail />
         </div>
 
-        {/* Channel Sidebar — 240px */}
-        <div className="flex-shrink-0 w-[240px] h-full">
-          <ChannelSidebar />
-        </div>
+        {/* Channel Sidebar — 240px, collapsible */}
+        <AnimatePresence initial={false}>
+          {channelSidebarOpen && (
+            <motion.div
+              key="channel-sidebar"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 240, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="flex-shrink-0 h-full overflow-hidden"
+            >
+              <ChannelSidebar />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Content Area — flex-1 */}
         <main
           id="main-content"
-          className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-[#07080e]"
+          className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-[#07080e] relative"
           tabIndex={-1}
         >
+          {/* Subtle expand toggle button when channel sidebar is collapsed */}
+          {!channelSidebarOpen && (
+            <button
+              onClick={toggleChannelSidebar}
+              aria-label="Expand channel sidebar"
+              title="Expand channel sidebar"
+              className="absolute left-3 top-3 z-30 p-2.5 rounded-xl bg-[#0f101f]/90 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 transition-all shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            </button>
+          )}
           {children}
         </main>
 
         {/* Member Panel — 256px, toggleable */}
         <AnimatePresence initial={false}>
-          {memberPanelOpen && (
+          {showMemberPanel && (
             <motion.div
               key="member-panel"
               initial={{ width: 0, opacity: 0 }}

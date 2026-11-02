@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Compass,
   Sparkles,
+  PanelLeftClose,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -243,7 +244,7 @@ export function ChannelSidebar() {
   const { communities, categories, activeCommunity, leaveCommunity } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
   const { conversations, initConversationsListener } = useDMStore();
-  const { openDeleteCommunityModal } = useUiStore();
+  const { openDeleteCommunityModal, toggleChannelSidebar } = useUiStore();
   const [dmSearch, setDmSearch] = useState('');
   const [showCommunityMenu, setShowCommunityMenu] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
@@ -292,13 +293,24 @@ export function ChannelSidebar() {
             <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
               <span>Direct Messages</span>
             </span>
-            <button
-              onClick={() => router.push('/messages')}
-              className="p-1 rounded-lg text-indigo-400 hover:bg-indigo-500/15 transition-colors cursor-pointer"
-              title="Start a new DM"
-            >
-              <Plus size={15} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => router.push('/messages')}
+                className="p-1 rounded-lg text-indigo-400 hover:bg-indigo-500/15 transition-colors cursor-pointer"
+                title="Start a new DM"
+                aria-label="Start a new direct message"
+              >
+                <Plus size={15} />
+              </button>
+              <button
+                onClick={toggleChannelSidebar}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Collapse sidebar"
+                aria-label="Collapse channel sidebar"
+              >
+                <PanelLeftClose size={15} />
+              </button>
+            </div>
           </div>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -364,10 +376,10 @@ export function ChannelSidebar() {
   return (
     <nav className="flex flex-col h-full bg-[#0b0c16] border-r border-white/[0.06]" aria-label={community ? `${community.name} channels` : 'Channels'}>
       {/* Community Header */}
-      <div className="flex-shrink-0 border-b border-white/[0.06] relative">
+      <div className="flex-shrink-0 border-b border-white/[0.06] relative flex items-center pr-2">
         <button
           onClick={() => setShowCommunityMenu((prev) => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.04] transition-colors group text-left cursor-pointer"
+          className="flex-1 flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.04] transition-colors group text-left cursor-pointer min-w-0"
         >
           <div className="flex items-center gap-2 min-w-0 pr-1">
             <span className="font-bold text-white text-sm truncate">
@@ -386,6 +398,15 @@ export function ChannelSidebar() {
               showCommunityMenu && 'rotate-180 text-white'
             )}
           />
+        </button>
+
+        <button
+          onClick={toggleChannelSidebar}
+          aria-label="Collapse channel sidebar"
+          title="Collapse channel sidebar"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+        >
+          <PanelLeftClose size={15} />
         </button>
 
         {/* Dropdown Menu */}
@@ -482,22 +503,31 @@ export function ChannelSidebar() {
             />
           ))
         ) : (
-          <div className="flex flex-col items-center justify-center px-4 py-12 text-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-violet-500/10 to-transparent border border-indigo-500/20 flex items-center justify-center text-2xl shadow-inner">
+          <div className="flex flex-col items-center justify-center px-3 py-6 text-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 via-violet-500/10 to-transparent border border-indigo-500/20 flex items-center justify-center text-lg shadow-inner">
               ✨
             </div>
             <div>
-              <p className="text-sm font-bold text-white mb-1">No Space Selected</p>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-[190px]">
-                Pick a community from the left bar or discover new spaces.
+              <p className="text-xs font-bold text-white mb-0.5">Explore Spaces</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed max-w-[190px]">
+                Browse public communities or create your own space.
               </p>
             </div>
-            <button
-              onClick={() => router.push('/discover')}
-              className="mt-1 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md shadow-indigo-500/20 cursor-pointer"
-            >
-              Explore Communities →
-            </button>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                onClick={() => router.push('/discover')}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md shadow-indigo-500/20 cursor-pointer min-h-[36px]"
+              >
+                Discover
+              </button>
+              <button
+                onClick={toggleChannelSidebar}
+                aria-label="Collapse channel sidebar"
+                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs border border-white/10 transition-all cursor-pointer min-h-[36px]"
+              >
+                Collapse
+              </button>
+            </div>
           </div>
         )}
 

@@ -1012,40 +1012,78 @@ export default function UserProfilePage() {
                 </div>
               </div>
 
-              {/* Account Details Table */}
-              <div className="p-5 rounded-2xl bg-[hsl(var(--bg-raised))] border border-white/5 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3.5">
-                  Account Credentials
-                </h3>
-                <div className="space-y-3 text-xs">
-                  <div className="flex justify-between items-center py-1.5 border-b border-white/5">
-                    <span className="text-slate-400">Display Name</span>
-                    <span className="text-slate-200 font-semibold">{displayName}</span>
+              {/* Account Details & Privacy-Safe Profile Card */}
+              {isOwn ? (
+                <div className="p-5 rounded-2xl bg-[#0f101f]/70 border border-white/[0.08] shadow-xl backdrop-blur-md">
+                  <div className="flex items-center justify-between mb-3.5 pb-2 border-b border-white/[0.06]">
+                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock size={12} className="text-indigo-400" />
+                      <span>Private Account Details (Only visible to you)</span>
+                    </h3>
+                    <Link
+                      href="/settings"
+                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium hover:underline"
+                    >
+                      Manage in Settings →
+                    </Link>
                   </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-white/5">
-                    <span className="text-slate-400">Username</span>
-                    <span className="text-slate-200 font-mono">@{username}</span>
-                  </div>
-                  {user?.email && (
+                  <div className="space-y-3 text-xs">
                     <div className="flex justify-between items-center py-1.5 border-b border-white/5">
-                      <span className="text-slate-400">Email Address</span>
-                      <span className="text-slate-200 font-medium">{user.email}</span>
+                      <span className="text-slate-400">Display Name</span>
+                      <span className="text-slate-200 font-semibold">{displayName}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between items-center py-1.5 border-b border-white/5">
-                    <span className="text-slate-400">Nexus Member ID</span>
-                    <span className="font-mono text-slate-400 text-[11px] truncate max-w-[200px]">
-                      {user?.id}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1.5">
-                    <span className="text-slate-400">Global Permissions</span>
-                    <span className="text-amber-400 font-bold flex items-center gap-1">
-                      <Crown size={12} /> Administrator
-                    </span>
+                    <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Username</span>
+                      <span className="text-slate-200 font-mono">@{username}</span>
+                    </div>
+                    {currentUser?.email && (
+                      <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                        <span className="text-slate-400">Account Email</span>
+                        <span className="text-slate-200 font-medium">{currentUser.email}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Profile Privacy</span>
+                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                        <Shield size={12} /> Shielded & Private
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5">
+                      <span className="text-slate-400">Visibility Scope</span>
+                      <span className="text-slate-300">Accepted Connections & Shared Spaces Only</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-5 rounded-2xl bg-[#0f101f]/70 border border-white/[0.08] shadow-xl backdrop-blur-md">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
+                    <Shield size={12} className="text-indigo-400" />
+                    <span>Public Profile Information</span>
+                  </h3>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Display Name</span>
+                      <span className="text-slate-200 font-semibold">{displayName}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Username</span>
+                      <span className="text-slate-200 font-mono">@{username}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-white/5">
+                      <span className="text-slate-400">Connection Status</span>
+                      <span className="text-indigo-400 font-semibold capitalize">
+                        {connectionStatus === 'accepted' ? 'Connected Friends' : 'Private Member'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5">
+                      <span className="text-slate-400">Trust & Safety</span>
+                      <span className="text-slate-300 flex items-center gap-1">
+                        <Shield size={11} className="text-emerald-400" /> Verified Member
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

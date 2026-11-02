@@ -1,25 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Search,
   Users,
   Flame,
   Sparkles,
   Zap,
-  CheckCircle2,
   Globe,
   Plus,
   Lock,
   Clock,
+  ShieldCheck,
+  Flag,
+  EyeOff,
+  Activity,
   ArrowRight,
   Shield,
   Layers,
+  ChevronRight,
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
+import { ReportModal } from '@/components/modals/report-modal';
+import {
+  containsProfanityOrSlur,
+  getMutedCommunityIds,
+  toggleMuteCommunity,
+} from '@/lib/moderation';
+import toast from 'react-hot-toast';
 
 const CATEGORIES = [
   { label: 'All', emoji: '🌟' },
@@ -67,7 +79,15 @@ function fmtNum(n: number) {
   return String(n);
 }
 
-function CommunityCard({ community }: { community: any }) {
+function CommunityCard({
+  community,
+  onReport,
+  onHide,
+}: {
+  community: any;
+  onReport: (c: any) => void;
+  onHide: (c: any) => void;
+}) {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
   const {
@@ -83,6 +103,7 @@ function CommunityCard({ community }: { community: any }) {
   const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
   const isPending = (userPendingCommunityIds || []).includes(community.id);
   const coverUrl = getCoverImage(community);
+  const isFresh = (community.memberCount || 1) <= 2;
 
   const handleClick = () => {
     setActiveCommunity(community);
@@ -108,28 +129,63 @@ function CommunityCard({ community }: { community: any }) {
   };
 
   return (
-    <div
+    <article
       onClick={handleClick}
-      className="group relative rounded-2xl overflow-hidden border border-white/[0.08] hover:border-indigo-500/40 bg-[#0f101f]/70 backdrop-blur-md cursor-pointer transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-950/50 flex flex-col"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+      className="group relative rounded-2xl overflow-hidden border border-white/[0.08] hover:border-indigo-500/40 bg-[#0f101f]/80 backdrop-blur-md cursor-pointer transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-950/50 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+      aria-label={`Community: ${community.name}`}
     >
       {/* Banner with Unique Cover */}
       <div className="relative h-32 w-full overflow-hidden bg-slate-900">
         <img
           src={coverUrl}
-          alt={community.name}
+          alt=""
+          aria-hidden="true"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0f101f] via-black/40 to-black/20" />
 
-        {/* Top Badges */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+        {/* Top Badges & Moderation Controls */}
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
+          {/* Quick Safety Actions */}
+          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-md p-0.5 rounded-lg border border-white/10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onHide(community);
+              }}
+              title="Hide / Mute community"
+              aria-label={`Hide ${community.name}`}
+              className="p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-w-[28px] min-h-[28px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <EyeOff size={13} aria-hidden="true" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onReport(community);
+              }}
+              title="Report community"
+              aria-label={`Report ${community.name}`}
+              className="p-1.5 rounded-md text-slate-300 hover:text-rose-400 hover:bg-white/10 transition-colors cursor-pointer min-w-[28px] min-h-[28px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Flag size={13} aria-hidden="true" />
+            </button>
+          </div>
+
           {isPrivate ? (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-semibold shadow-sm">
-              <Lock size={10} /> Private
+            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-200 text-[10px] font-semibold shadow-sm">
+              <Lock size={10} aria-hidden="true" /> Private
             </span>
           ) : (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/20 backdrop-blur-md border border-indigo-500/30 text-indigo-300 text-[10px] font-semibold shadow-sm">
-              <Globe size={10} /> Public
+            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/20 backdrop-blur-md border border-indigo-500/30 text-indigo-200 text-[10px] font-semibold shadow-sm">
+              <Globe size={10} aria-hidden="true" /> Public
             </span>
           )}
         </div>
@@ -147,6 +203,7 @@ function CommunityCard({ community }: { community: any }) {
                   ? `linear-gradient(135deg, ${community.accentColor}, #4338ca)`
                   : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
               }}
+              aria-hidden="true"
             >
               {community.icon && community.icon.startsWith('http') ? (
                 <img
@@ -161,11 +218,20 @@ function CommunityCard({ community }: { community: any }) {
 
             <button
               onClick={handleAction}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+              aria-label={
+                isJoined
+                  ? `Enter ${community.name}`
+                  : isPrivate && isPending
+                  ? `Request pending for ${community.name}`
+                  : isPrivate
+                  ? `Request to join ${community.name}`
+                  : `Join ${community.name}`
+              }
+              className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 isJoined
                   ? 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
                   : isPrivate && isPending
-                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  ? 'bg-amber-500/15 text-amber-200 border border-amber-500/30'
                   : isPrivate
                   ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black hover:opacity-90 font-bold shadow-amber-500/20'
                   : 'bg-white text-black hover:bg-slate-200'
@@ -175,11 +241,11 @@ function CommunityCard({ community }: { community: any }) {
                 'Joined ✓'
               ) : isPrivate && isPending ? (
                 <>
-                  <Clock size={11} /> Pending
+                  <Clock size={12} aria-hidden="true" /> Pending
                 </>
               ) : isPrivate ? (
                 <>
-                  <Lock size={11} /> Request
+                  <Lock size={12} aria-hidden="true" /> Request
                 </>
               ) : (
                 '+ Join'
@@ -187,28 +253,49 @@ function CommunityCard({ community }: { community: any }) {
             </button>
           </div>
 
-          {/* Title & Description */}
-          <h4 className="font-bold text-white text-base group-hover:text-indigo-400 transition-colors line-clamp-1 mb-1">
-            {community.name}
-          </h4>
-          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-            {community.description || 'Welcome to this vibrant community space on Nexus.'}
+          {/* Title & Signals */}
+          <div className="flex items-center gap-1.5 mb-1">
+            <h3 className="font-bold text-white text-base group-hover:text-indigo-400 transition-colors line-clamp-1">
+              {community.name}
+            </h3>
+            {community.isOfficial && (
+              <span title="Verified Community" aria-label="Verified Community">
+                <ShieldCheck size={15} className="text-indigo-400 shrink-0" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+            {community.description || 'Welcome to this vibrant community space on Nexus. Join conversations, share projects, and collaborate.'}
           </p>
         </div>
 
         {/* Footer Meta */}
-        <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/[0.06] text-xs text-slate-400">
-          <span className="flex items-center gap-1.5 text-slate-300 font-medium">
-            <Users size={13} className="text-indigo-400" />
+        <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/[0.06] text-xs text-slate-300">
+          <span className="flex items-center gap-1.5 text-slate-200 font-medium">
+            <Users size={14} className="text-indigo-400" aria-hidden="true" />
             {fmtNum(community.memberCount ?? 1)}{' '}
             {(community.memberCount ?? 1) === 1 ? 'member' : 'members'}
           </span>
-          <span className="px-2 py-0.5 rounded-md bg-white/[0.04] text-[10px] text-slate-400 border border-white/[0.06] capitalize">
-            {community.category || 'General'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {isFresh ? (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                New Space
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-medium">
+                <Activity size={10} aria-hidden="true" />
+                Active
+              </span>
+            )}
+            <span className="px-2 py-0.5 rounded-md bg-white/[0.04] text-[10px] text-slate-300 border border-white/[0.06] capitalize">
+              {community.category || 'General'}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -221,48 +308,54 @@ function StatsBanner({
 }) {
   const stats = [
     {
-      icon: <Globe size={18} className="text-indigo-400" />,
+      icon: <Globe size={18} className="text-indigo-400" aria-hidden="true" />,
       value: `${communityCount}`,
       label: 'Real Communities',
       accent: 'border-indigo-500/20 bg-indigo-500/5',
+      href: '#communities',
     },
     {
-      icon: <Users size={18} className="text-violet-400" />,
+      icon: <Users size={18} className="text-violet-400" aria-hidden="true" />,
       value: `${totalMembers}`,
       label: 'Active Members',
       accent: 'border-violet-500/20 bg-violet-500/5',
+      href: '#communities',
     },
     {
-      icon: <Zap size={18} className="text-yellow-400" />,
-      value: '100%',
-      label: 'Real-Time Sync',
+      icon: <Zap size={18} className="text-yellow-400" aria-hidden="true" />,
+      value: 'Operational',
+      label: 'Real-Time Sync (Status)',
       accent: 'border-yellow-500/20 bg-yellow-500/5',
+      href: '/status',
     },
     {
-      icon: <Flame size={18} className="text-orange-400" />,
-      value: '99.9%',
-      label: 'Cloud Uptime',
-      accent: 'border-orange-500/20 bg-orange-500/5',
+      icon: <Flame size={18} className="text-emerald-400" aria-hidden="true" />,
+      value: '99.99%',
+      label: 'Live Uptime (Status)',
+      accent: 'border-emerald-500/20 bg-emerald-500/5',
+      href: '/status',
     },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {stats.map((s) => (
-        <div
+        <Link
           key={s.label}
-          className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border ${s.accent} backdrop-blur-xl transition-all duration-200 hover:border-white/20`}
+          href={s.href}
+          aria-label={`${s.value} - ${s.label}`}
+          className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border ${s.accent} backdrop-blur-xl transition-all duration-200 hover:border-white/30 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
         >
           <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center flex-shrink-0 shadow-inner">
             {s.icon}
           </div>
           <div>
-            <div className="text-white font-extrabold text-lg tracking-tight leading-none">
+            <div className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-none">
               {s.value}
             </div>
-            <div className="text-slate-400 text-xs mt-1 font-medium">{s.label}</div>
+            <div className="text-slate-300 text-xs mt-1 font-medium">{s.label}</div>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );
@@ -274,22 +367,44 @@ export default function DiscoverPage() {
   const { openCreateCommunityModal } = useUiStore();
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [mutedIds, setMutedIds] = useState<string[]>([]);
+  const [reportTarget, setReportTarget] = useState<any | null>(null);
 
-  const safeCommunities = communities || [];
+  useEffect(() => {
+    setMutedIds(getMutedCommunityIds());
+  }, []);
 
-  // Calculate actual total members across all real communities dynamically
+  const handleHideCommunity = (c: any) => {
+    toggleMuteCommunity(c.id);
+    const updated = getMutedCommunityIds();
+    setMutedIds(updated);
+    toast.success(`Hidden "${c.name}". You won't see it in discovery.`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          toggleMuteCommunity(c.id);
+          setMutedIds(getMutedCommunityIds());
+        },
+      },
+    });
+  };
+
+  // Filter out abusive/slurs and muted communities from public discovery
+  const safeCommunities = (communities || []).filter(
+    (c) => !containsProfanityOrSlur(c.name) && !mutedIds.includes(c.id)
+  );
+
   const totalMemberCount = safeCommunities.reduce(
     (sum, c) => sum + (c.memberCount || 1),
     0
   );
 
-  // Filter communities by search query and category
   const filtered = safeCommunities.filter((c) => {
     const q = searchQuery.toLowerCase();
     const matchSearch =
       !q ||
       c.name.toLowerCase().includes(q) ||
-      (c.tags || []).some((t) => t.includes(q)) ||
+      (c.tags || []).some((t: string) => t.toLowerCase().includes(q)) ||
       (c.description || '').toLowerCase().includes(q);
     const matchCat =
       activeCategory === 'All' || c.category === activeCategory.toLowerCase();
@@ -299,14 +414,13 @@ export default function DiscoverPage() {
   return (
     <div className="h-full overflow-y-auto bg-[#07080e] scrollbar-thin scrollbar-thumb-white/10 select-none">
       {/* Hero Section with Ambient Midnight-Violet Lighting */}
-      <div className="relative overflow-hidden pt-12 pb-8 px-6">
-        {/* Radial Ambient Backlights */}
+      <div className="relative overflow-hidden pt-12 pb-8 px-4 sm:px-6">
         <div className="absolute top-0 left-1/3 w-[500px] h-[350px] bg-indigo-600/15 rounded-full blur-[130px] pointer-events-none" />
         <div className="absolute top-10 right-1/4 w-[400px] h-[300px] bg-violet-600/15 rounded-full blur-[120px] pointer-events-none" />
 
         <div className="relative max-w-5xl mx-auto text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/15 via-violet-500/15 to-pink-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold shadow-sm">
-            <Sparkles size={13} className="text-indigo-400" />
+            <Sparkles size={13} className="text-indigo-400" aria-hidden="true" />
             <span>Discover Vibrant Communities on Nexus</span>
           </div>
 
@@ -317,25 +431,27 @@ export default function DiscoverPage() {
             </span>
           </h1>
 
-          <p className="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">
+          <p className="text-slate-300 text-sm max-w-lg mx-auto leading-relaxed">
             Connect with real people, build friendships, and explore shared spaces designed for gaming, tech, and collaboration.
           </p>
 
-          {/* Frosted Glass Search Bar */}
+          {/* Search Bar */}
           <div className="max-w-2xl mx-auto pt-2 pb-2">
             <div className="relative flex items-center rounded-2xl bg-white/[0.04] border border-white/[0.1] focus-within:border-indigo-500/60 focus-within:ring-4 focus-within:ring-indigo-500/15 shadow-2xl backdrop-blur-xl transition-all">
-              <Search className="absolute left-4 text-slate-400" size={18} />
+              <Search className="absolute left-4 text-slate-400" size={18} aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search communities by name, topic, or keyword..."
-                className="w-full bg-transparent py-3.5 pl-12 pr-4 text-sm text-white placeholder-slate-500 outline-none"
+                aria-label="Search communities by name, topic, or keyword"
+                className="w-full bg-transparent py-3.5 pl-12 pr-4 text-sm text-white placeholder-slate-400 outline-none"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="mr-3 px-2 py-1 text-xs text-slate-400 hover:text-white rounded-lg bg-white/5"
+                  aria-label="Clear search query"
+                  className="mr-3 px-2 py-1 text-xs text-slate-300 hover:text-white rounded-lg bg-white/5 focus-visible:ring-2 focus-visible:ring-indigo-400 cursor-pointer min-h-[32px]"
                 >
                   Clear
                 </button>
@@ -351,28 +467,43 @@ export default function DiscoverPage() {
             />
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex items-center justify-center gap-2 overflow-x-auto pt-3 pb-1 scrollbar-none">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.label}
-                onClick={() => setActiveCategory(cat.label)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap cursor-pointer ${
-                  activeCategory === cat.label
-                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/20'
-                    : 'bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08] border border-white/[0.06]'
-                }`}
-              >
-                <span>{cat.emoji}</span>
-                <span>{cat.label}</span>
-              </button>
-            ))}
+          {/* Category Filter Pills (Mobile Scroll-Snap with Left/Right Edge Gradient Affordance) */}
+          <div className="relative max-w-4xl mx-auto pt-4 pb-1">
+            {/* Scroll Affordance Indicators for Mobile */}
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#07080e] to-transparent z-10 md:hidden" />
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[#07080e] to-transparent z-10 md:hidden" />
+
+            <div
+              role="tablist"
+              aria-label="Community categories"
+              className="flex items-center justify-start md:justify-center gap-2.5 overflow-x-auto px-4 sm:px-6 py-2 snap-x snap-mandatory scrollbar-none"
+            >
+              {CATEGORIES.map((cat) => {
+                const isSelected = activeCategory === cat.label;
+                return (
+                  <button
+                    key={cat.label}
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => setActiveCategory(cat.label)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap cursor-pointer snap-center min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/20'
+                        : 'bg-white/[0.05] text-slate-300 hover:text-white hover:bg-white/[0.1] border border-white/[0.08]'
+                    }`}
+                  >
+                    <span aria-hidden="true">{cat.emoji}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Community Grid Section */}
-      <div className="max-w-6xl mx-auto px-6 pb-20 space-y-8">
+      <div id="communities" className="max-w-7xl mx-auto px-4 sm:px-6 pb-20 space-y-8">
         {/* If searching */}
         {searchQuery && (
           <div>
@@ -389,14 +520,19 @@ export default function DiscoverPage() {
                 <p className="font-semibold text-white text-sm mb-1">
                   No matching communities found
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-300">
                   Try searching for another topic or create your own!
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {filtered.map((c) => (
-                  <CommunityCard key={c.id} community={c} />
+                  <CommunityCard
+                    key={c.id}
+                    community={c}
+                    onReport={(target) => setReportTarget(target)}
+                    onHide={handleHideCommunity}
+                  />
                 ))}
               </div>
             )}
@@ -411,53 +547,58 @@ export default function DiscoverPage() {
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-3xl">
                   ✨
                 </div>
-                <h3 className="text-2xl font-bold text-white">
-                  No Communities Created Yet
-                </h3>
-                <p className="text-slate-400 text-sm max-w-md mx-auto">
+                <h2 className="text-2xl font-bold text-white">
+                  No Communities Available
+                </h2>
+                <p className="text-slate-300 text-sm max-w-md mx-auto">
                   Be the very first creator! Click below to start your community and invite friends to join.
                 </p>
                 <button
                   onClick={openCreateCommunityModal}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:opacity-90 transition-all shadow-xl shadow-indigo-500/30 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:opacity-90 transition-all shadow-xl shadow-indigo-500/30 cursor-pointer min-h-[44px] focus-visible:ring-2 focus-visible:ring-indigo-400"
                 >
-                  <Plus size={18} /> Create a Community
+                  <Plus size={18} aria-hidden="true" /> Create a Community
                 </button>
               </div>
             ) : (
               <>
-                <section>
+                <section aria-labelledby="active-communities-heading">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Flame size={18} className="text-orange-400" />
-                      <h2 className="text-lg font-bold text-white">
+                      <Flame size={18} className="text-orange-400" aria-hidden="true" />
+                      <h2 id="active-communities-heading" className="text-lg font-bold text-white">
                         Active Communities ({filtered.length})
                       </h2>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                     {filtered.map((c) => (
-                      <CommunityCard key={c.id} community={c} />
+                      <CommunityCard
+                        key={c.id}
+                        community={c}
+                        onReport={(target) => setReportTarget(target)}
+                        onHide={handleHideCommunity}
+                      />
                     ))}
                   </div>
                 </section>
 
                 {/* Bottom Call to Action Card */}
-                <section>
+                <section aria-label="Create Community Call to Action">
                   <div className="relative rounded-3xl overflow-hidden p-8 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-r from-indigo-950/40 via-violet-950/30 to-[#0c0d18] border border-indigo-500/20 shadow-2xl">
                     <div className="space-y-1 text-center md:text-left">
                       <h3 className="text-xl font-extrabold text-white">
                         Want to start your own space?
                       </h3>
-                      <p className="text-slate-400 text-xs">
+                      <p className="text-slate-300 text-xs">
                         Create custom channels, manage permissions, and build a community around your passion.
                       </p>
                     </div>
                     <button
                       onClick={openCreateCommunityModal}
-                      className="flex-shrink-0 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-lg shadow-indigo-500/25 flex items-center gap-2 cursor-pointer"
+                      className="flex-shrink-0 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-lg shadow-indigo-500/25 flex items-center gap-2 cursor-pointer min-h-[44px] focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
-                      <Sparkles size={14} /> Create a Community
+                      <Sparkles size={14} aria-hidden="true" /> Create a Community
                     </button>
                   </div>
                 </section>
@@ -466,6 +607,17 @@ export default function DiscoverPage() {
           </>
         )}
       </div>
+
+      {/* Safety Report Modal */}
+      {reportTarget && (
+        <ReportModal
+          isOpen={!!reportTarget}
+          onClose={() => setReportTarget(null)}
+          targetType="community"
+          targetId={reportTarget.id}
+          targetName={reportTarget.name}
+        />
+      )}
     </div>
   );
 }

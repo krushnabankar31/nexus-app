@@ -6,6 +6,8 @@ import { X, Sparkles, Globe, Lock, Check } from 'lucide-react';
 import { useUiStore } from '@/stores/ui-store';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { isCommunityNameAllowed } from '@/lib/moderation';
+import toast from 'react-hot-toast';
 import type { Community } from '@nexus/types';
 
 const CATEGORIES = [
@@ -45,6 +47,12 @@ export function CreateCommunityModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    const validation = isCommunityNameAllowed(name.trim());
+    if (!validation.allowed) {
+      toast.error(validation.reason || 'Invalid community name.');
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -87,7 +95,7 @@ export function CreateCommunityModal() {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
       <div 
-        className="relative w-full max-w-lg rounded-2xl bg-[#1e1f22] border border-white/10 shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg rounded-3xl bg-[#0f101f] border border-white/10 shadow-2xl overflow-hidden backdrop-blur-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-6 pb-4 border-b border-white/5">

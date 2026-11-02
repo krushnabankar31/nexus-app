@@ -244,7 +244,7 @@ function UserContextMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
   const items = [
     { icon: <UserCircle size={14} />, label: 'View Profile', action: () => router.push('/profile/me') },
     { icon: <Settings size={14} />, label: 'Settings', action: () => router.push('/settings') },
-    { icon: <Bell size={14} />, label: 'Notifications', action: () => {} },
+    { icon: <Bell size={14} />, label: 'Notifications', action: () => router.push('/notifications') },
     { icon: <Moon size={14} />, label: 'Set Status', action: () => {} },
     null,
     { icon: <LogOut size={14} />, label: 'Log Out', danger: true, action: () => { logout(); router.push('/login'); } },

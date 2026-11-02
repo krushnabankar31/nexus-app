@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Eye,
   EyeOff,
@@ -67,8 +67,10 @@ function GoogleIcon() {
   );
 }
 
-export default function SignupPage() {
+function SignupFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const plan = searchParams.get('plan');
   const { registerWithEmail, loginWithGooglePopup, isAuthenticated, user } = useAuthStore();
 
   // Redirect if already authenticated
@@ -210,6 +212,27 @@ export default function SignupPage() {
           Start connecting with real communities, voice rooms, and members.
         </p>
       </div>
+
+      {/* Plan Details & Billing Expectations */}
+      {plan === 'pro' && (
+        <div className="mb-6 p-4 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-xs">
+          <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm mb-1">
+            <Sparkles size={15} className="text-indigo-400" />
+            <span>14-Day Free Pro Trial Included</span>
+          </div>
+          <p className="text-slate-300 leading-relaxed">
+            Full access to 4K 60fps streaming, unlimited voice channels, and custom bots. 
+            <strong className="text-white"> Free for 14 days</strong>, then $9.99/month unless cancelled. No charge today. 
+            You can cancel anytime with one click in Account Settings.
+          </p>
+        </div>
+      )}
+
+      {plan === 'free' && (
+        <div className="mb-6 p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-slate-300">
+          <span className="font-semibold text-white">Free Community Plan:</span> Free forever, no credit card required, unlimited public spaces.
+        </div>
+      )}
 
       {/* General error alert */}
       {generalError && (
@@ -479,5 +502,13 @@ export default function SignupPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading signup...</div>}>
+      <SignupFormContent />
+    </Suspense>
   );
 }

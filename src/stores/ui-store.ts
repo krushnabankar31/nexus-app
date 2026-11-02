@@ -12,6 +12,7 @@ interface UiState {
   activeChannelId: string | null;
   activeView: AppView;
   memberPanelOpen: boolean;
+  channelSidebarOpen: boolean;
   mobileDrawerOpen: boolean;
   mobileDrawerContent: "community-rail" | "channel-sidebar" | "member-panel" | null;
   isMuted: boolean;
@@ -33,6 +34,8 @@ interface UiState {
   setActiveView: (view: AppView) => void;
   toggleMemberPanel: () => void;
   setMemberPanelOpen: (open: boolean) => void;
+  toggleChannelSidebar: () => void;
+  setChannelSidebarOpen: (open: boolean) => void;
   openMobileDrawer: (content: UiState["mobileDrawerContent"]) => void;
   closeMobileDrawer: () => void;
   toggleMute: () => void;
@@ -53,6 +56,7 @@ export const useUiStore = create<UiState>()(
         activeChannelId: "ch-4",
         activeView: "community",
         memberPanelOpen: true,
+        channelSidebarOpen: true,
         mobileDrawerOpen: false,
         mobileDrawerContent: null,
         isMuted: false,
@@ -85,6 +89,11 @@ export const useUiStore = create<UiState>()(
           set((s) => ({ memberPanelOpen: !s.memberPanelOpen })),
 
         setMemberPanelOpen: (open) => set({ memberPanelOpen: open }),
+
+        toggleChannelSidebar: () =>
+          set((s) => ({ channelSidebarOpen: !s.channelSidebarOpen })),
+
+        setChannelSidebarOpen: (open) => set({ channelSidebarOpen: open }),
 
         openMobileDrawer: (content) =>
           set({ mobileDrawerOpen: true, mobileDrawerContent: content }),
@@ -122,6 +131,7 @@ export const useUiStore = create<UiState>()(
           activeChannelId: state.activeChannelId,
           activeView: state.activeView,
           memberPanelOpen: state.memberPanelOpen,
+          channelSidebarOpen: state.channelSidebarOpen,
           isMuted: state.isMuted,
           isDeafened: state.isDeafened,
         }),
