@@ -19,7 +19,8 @@ import {
   ExternalLink,
   ChevronRight,
   Eye,
-  MessageSquare
+  MessageSquare,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -43,6 +44,7 @@ export default function SettingsPage() {
   const [notifMentions, setNotifMentions] = useState(true);
   const [notifCommunity, setNotifCommunity] = useState(false);
   const [notifConnections, setNotifConnections] = useState(true);
+  const [onboardingResetToast, setOnboardingResetToast] = useState(false);
 
   const tabs = [
     { id: 'account', label: 'My Account', icon: User },
@@ -182,6 +184,33 @@ export default function SettingsPage() {
             <span>Configure 2FA</span>
           </Link>
         </div>
+      </div>
+
+      <div className="bg-surface-900 border border-surface-800 rounded-xl p-6 space-y-3">
+        <h3 className="font-bold text-lg mb-1 text-white">Getting Started & Onboarding</h3>
+        <p className="text-sm text-surface-400">
+          Want to revisit the new member setup guide? You can restore the onboarding checklist on your Discover dashboard at any time.
+        </p>
+        <button
+          onClick={() => {
+            const uid = user?.id || 'anon';
+            localStorage.removeItem(`nexus_onboarding_dismissed_${uid}`);
+            localStorage.removeItem('nexus_onboarding_dismissed');
+            localStorage.setItem(`nexus_visit_count_${uid}`, '1');
+            setOnboardingResetToast(true);
+            setTimeout(() => setOnboardingResetToast(false), 4000);
+          }}
+          className="px-4 py-2 bg-surface-800 hover:bg-surface-700 border border-surface-700 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2 text-surface-200 hover:text-white cursor-pointer"
+        >
+          <RotateCcw size={14} className="text-indigo-400" />
+          <span>Show Onboarding Again</span>
+        </button>
+        {onboardingResetToast && (
+          <p className="text-xs text-emerald-400 flex items-center gap-1.5 mt-2 animate-fade-in">
+            <Check size={14} />
+            <span>Onboarding checklist has been reset and is now visible on Discover!</span>
+          </p>
+        )}
       </div>
 
       <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">

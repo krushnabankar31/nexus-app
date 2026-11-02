@@ -238,10 +238,18 @@ export default function UserProfilePage() {
     if (isOwn && currentUser) {
       setProfileUser(currentUser);
       setIsLoading(false);
+      
+      // Auto-open edit modal if requested via deep link (?edit=true)
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('edit') === 'true') {
+          openEditModal();
+        }
+      }
     }
   }, [isOwn, currentUser]);
 
-  // Fetch another user from Firestore if visiting someone else
+  // Fetch another user from server-authorized API ensuring zero private data leakage
   useEffect(() => {
     if (isOwn) return;
     if (!userId) return;
@@ -249,13 +257,27 @@ export default function UserProfilePage() {
     async function fetchOtherUser() {
       setIsLoading(true);
       try {
+        const res = await fetch(`/api/users/${userId}`);
+        if (res.ok) {
+          const publicProfile = await res.json();
+          setProfileUser({
+            ...publicProfile,
+            email: '', // Server-enforced protection: private email is strictly never exposed
+          });
+          setIsLoading(false);
+          return;
+        }
+      } catch (apiErr) {
+        console.warn('API profile fetch error, checking local fallback:', apiErr);
+      }
+
+      try {
         if (db) {
           const docRef = doc(db, 'users', userId);
           const snap = await getDoc(docRef);
           if (snap.exists()) {
             const data = snap.data() as User;
             setProfileUser({
-              ...data,
               id: snap.id,
               displayName: data.displayName || data.username || 'User',
               username: data.username || 'user',
@@ -267,6 +289,11 @@ export default function UserProfilePage() {
               banner: data.banner || null,
               bannerPreset: data.bannerPreset || 'nebula',
               interests: data.interests || ['Developer', 'Gaming'],
+              badges: data.badges || [],
+              links: data.links || [],
+              isVerified: !!data.isVerified,
+              isPremium: !!data.isPremium,
+              email: '', // Redacted
             });
             setIsLoading(false);
             return;

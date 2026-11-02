@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Hash,
   Volume2,
@@ -19,16 +20,39 @@ import {
   Clock,
   Sparkles,
   AlertCircle,
+  Flag,
+  EyeOff,
+  Share2,
+  Crown,
+  Calendar,
+  CheckCircle2,
+  Tag
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
+import { USER_MAP, MOCK_USERS } from '@/lib/mock-data';
+import { ReportModal } from '@/components/modals/report-modal';
+import { toggleMuteCommunity, getMutedCommunityIds } from '@/lib/moderation';
+import toast from 'react-hot-toast';
 
 const COMMUNITY_RULES = [
-  'Be respectful — no hate speech, harassment, or toxicity',
-  'No spam, self-promotion, or unsolicited DMs',
-  'Keep discussions in the relevant channels',
-  'Follow Nexus Community Guidelines at all times',
+  {
+    title: 'Respectful Discourse',
+    description: 'No harassment, hate speech, discrimination, or abusive language under any circumstances.',
+  },
+  {
+    title: 'No Spam or Solicitation',
+    description: 'Avoid unsolicited direct messages, repetitive links, self-promotion, or scam content.',
+  },
+  {
+    title: 'Stay on Topic',
+    description: 'Keep messages and media in relevant channels designated by the moderators.',
+  },
+  {
+    title: 'Follow Platform Guidelines',
+    description: 'All discussions must comply with Nexus Terms of Service and Trust & Safety standards.',
+  },
 ];
 
 const COMMUNITY_COVERS = [
@@ -60,6 +84,7 @@ function getCoverImage(community: { id: string; name?: string; banner?: string |
 }
 
 export default function CommunityPage() {
+  const router = useRouter();
   const params = useParams<{ communityId: string }>();
   const {
     communities,
@@ -74,12 +99,16 @@ export default function CommunityPage() {
   } = useCommunityStore();
   const { user: currentUser } = useAuthStore();
 
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
+
   const community =
     communities.find((c) => c.id === params.communityId) ??
     activeCommunity ?? {
       id: params.communityId,
       name: 'Community',
       description: 'A space on Nexus.',
+      longDescription: 'Welcome to this community. Join conversations, share updates, and collaborate with members.',
       icon: '🌐',
       accentColor: '#6366f1',
       memberCount: 1,
@@ -88,6 +117,9 @@ export default function CommunityPage() {
       isVerified: false,
       isPublic: true,
       requiresApproval: false,
+      ownerId: 'usr_me',
+      createdAt: '2026-01-01T00:00:00Z',
+      tags: ['community', 'collaboration'],
     };
 
   const safeMembers = members || [];
@@ -124,12 +156,66 @@ export default function CommunityPage() {
 
   // Quick channels from community categories
   const allChannels = safeCategories.flatMap((cat) => cat.channels || []);
-  const quickChannels = allChannels.slice(0, 4);
+  const quickChannels = allChannels.slice(0, 6);
+
+  // Resolve Real Owner & Moderators from mock records / store
+  const ownerUser = community.ownerId ? USER_MAP[community.ownerId] : null;
+  const ownerDisplayName = ownerUser?.displayName || community.ownerName || community.creatorName || (isOwner ? currentUser?.displayName || 'You' : 'Community Founder');
+  const ownerUsername = ownerUser?.username || 'owner';
+  const ownerAvatar = ownerUser?.avatar || null;
+  const ownerBio = ownerUser?.bio || 'Creator and manager of this community space.';
+
+  // Moderators sample
+  const moderators = MOCK_USERS.slice(1, 3);
+
+  const handleShare = () => {
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Community link copied to clipboard!');
+      setLiveAnnouncement('Community link copied to clipboard');
+    }
+  };
+
+  const handleHide = () => {
+    toggleMuteCommunity(community.id);
+    toast.success(`Hidden "${community.name}".`, {
+      action: {
+        label: 'Undo',
+        onClick: () => toggleMuteCommunity(community.id),
+      },
+    });
+    setLiveAnnouncement(`Community ${community.name} muted`);
+  };
+
+  const handleJoin = async () => {
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    await joinPublicCommunity(community, currentUser);
+    toast.success(`Joined "${community.name}"! Welcome to the space.`);
+    setLiveAnnouncement(`Successfully joined ${community.name}`);
+  };
+
+  const handleRequestAccess = async () => {
+    if (!currentUser) {
+      router.push('/login');
+      return;
+    }
+    await requestToJoinPrivateCommunity(community, currentUser);
+    toast.success(`Join request sent to ${community.name} moderators.`);
+    setLiveAnnouncement(`Join request submitted for ${community.name}`);
+  };
 
   return (
-    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pb-16">
+      {/* Screen Reader Live Region */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {liveAnnouncement}
+      </div>
+
       {/* Banner */}
-      <div className="relative h-60 w-full flex-shrink-0 overflow-hidden bg-[#0a0b16]">
+      <div className="relative h-64 md:h-72 w-full flex-shrink-0 overflow-hidden bg-[#0a0b16]">
         <img
           src={getCoverImage(community)}
           alt={community.name}
@@ -137,71 +223,138 @@ export default function CommunityPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#07080e] via-[#07080e]/40 to-black/30" />
 
-        {/* Top Badges */}
-        <div className="absolute top-4 right-4 flex items-center gap-2">
+        {/* Top Action Bar */}
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/50 backdrop-blur-xl border border-white/10 shadow-lg">
+            <button
+              onClick={handleShare}
+              title="Share community link"
+              aria-label="Share community link"
+              className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Share2 size={15} />
+            </button>
+            <button
+              onClick={handleHide}
+              title="Hide / Mute community"
+              aria-label="Hide community"
+              className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <EyeOff size={15} />
+            </button>
+            <button
+              onClick={() => setShowReportModal(true)}
+              title="Report community"
+              aria-label="Report community"
+              className="p-2 rounded-xl text-slate-300 hover:text-rose-400 hover:bg-white/10 transition-colors cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Flag size={15} />
+            </button>
+          </div>
+
           {isPrivateCommunity ? (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold backdrop-blur-xl">
-              <Lock size={12} /> Private Community
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold backdrop-blur-xl shadow-lg">
+              <Lock size={12} /> Private
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold backdrop-blur-xl">
-              <Globe size={12} /> Public Community
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold backdrop-blur-xl shadow-lg">
+              <Globe size={12} /> Public
             </span>
           )}
 
           {isOwner && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold backdrop-blur-xl">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold backdrop-blur-xl shadow-lg">
               👑 Owner
             </span>
           )}
         </div>
 
         {/* Community Identity in Banner */}
-        <div className="absolute bottom-4 left-6 flex items-end gap-4">
-          <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl ring-4 ring-[#07080e] overflow-hidden flex-shrink-0 text-3xl bg-[#121324] border border-white/10"
-            style={{ background: `${accentColor}33` }}
-          >
-            {community.icon && community.icon.startsWith('http') ? (
-              <img
-                src={community.icon}
-                alt={community.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span>{community.icon || '🌐'}</span>
-            )}
+        <div className="absolute bottom-5 left-6 right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="flex items-end gap-4">
+            <div
+              className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-3xl shadow-2xl ring-4 ring-[#07080e] overflow-hidden flex-shrink-0 text-3xl sm:text-4xl bg-[#121324] border border-white/10"
+              style={{ background: `${accentColor}33` }}
+            >
+              {community.icon && community.icon.startsWith('http') ? (
+                <img
+                  src={community.icon}
+                  alt={community.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span>{community.icon || '🌐'}</span>
+              )}
+            </div>
+            <div className="pb-1">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">{community.name}</h1>
+                {community.isVerified && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500" title="Verified Community">
+                    <Shield className="h-3 w-3 text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-300 mt-1">
+                <span className="font-medium text-slate-200">{memberCount.toLocaleString()} members</span>
+                <span>·</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
+                  {onlineCount.toLocaleString()} online
+                </span>
+                {community.category && (
+                  <>
+                    <span>·</span>
+                    <span className="capitalize px-2 py-0.5 rounded-md bg-white/10 text-xs">{community.category}</span>
+                  </>
+                )}
+                {community.createdAt && (
+                  <>
+                    <span>·</span>
+                    <span className="text-slate-400">Created {new Date(community.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="pb-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white tracking-tight">{community.name}</h1>
-              {community.isVerified && (
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500">
-                  <Shield className="h-3 w-3 text-white" />
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-3 text-sm text-slate-400 mt-0.5">
-              <span>{memberCount.toLocaleString()} members</span>
-              <span>·</span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
-                {onlineCount.toLocaleString()} online
+
+          {/* Primary Action Button */}
+          <div className="sm:self-end">
+            {isMember ? (
+              <span className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 text-white font-semibold text-xs border border-white/20 shadow-md">
+                <CheckCircle2 size={15} className="text-emerald-400" />
+                <span>Joined Member</span>
               </span>
-              {community.category && (
-                <>
-                  <span>·</span>
-                  <span className="capitalize">{community.category}</span>
-                </>
-              )}
-            </div>
+            ) : isPrivateCommunity ? (
+              isPending ? (
+                <span className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold text-xs shadow-md">
+                  <Clock size={15} />
+                  <span>Request Pending Approval</span>
+                </span>
+              ) : (
+                <button
+                  onClick={handleRequestAccess}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-black font-bold text-xs shadow-lg shadow-amber-500/25 transition-all cursor-pointer min-h-[44px]"
+                >
+                  <Lock size={15} />
+                  <span>Request to Join</span>
+                </button>
+              )
+            ) : (
+              <button
+                onClick={handleJoin}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px]"
+              >
+                <span>+ Join Community</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Owner Pending Requests Banner */}
       {isOwner && safeJoinRequests.length > 0 && (
-        <div className="mx-6 mt-4 p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-4">
+        <div className="mx-6 mt-6 p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
               <Shield size={20} />
@@ -225,266 +378,329 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {/* Public Non-Member Banner */}
-      {!isPrivateCommunity && !isMember && (
-        <div className="mx-6 mt-4 p-4 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
-              <Globe size={20} />
+      {/* Private Community Gate Notice for Non-Members */}
+      {isPrivateCommunity && !isMember && (
+        <div className="mx-6 mt-6 p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 via-[#0b0c16] to-[#07080e] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Lock size={20} />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white">
-                Join {community.name}
-              </h4>
-              <p className="text-xs text-indigo-200/80">
-                This is a public community! Join now to send messages, join voice channels, and appear in the member list.
+              <h4 className="text-sm font-bold text-white">Approval Required Before Joining</h4>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed max-w-xl">
+                This private space is protected by owner & moderator verification. Submit a request to have your profile reviewed. Once approved, you will gain access to private channels and events.
               </p>
             </div>
           </div>
-          <button
-            onClick={async () => {
-              if (currentUser) {
-                await joinPublicCommunity(community, currentUser);
-              }
-            }}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-500/25 cursor-pointer shrink-0"
-          >
-            + Join Community
-          </button>
+          {isPending ? (
+            <span className="text-xs font-semibold px-4 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+              Pending Moderator Review
+            </span>
+          ) : (
+            <button
+              onClick={handleRequestAccess}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold text-xs hover:opacity-90 transition-all shrink-0 cursor-pointer"
+            >
+              Submit Join Request
+            </button>
+          )}
         </div>
       )}
 
-      {/* Private Community Gate for Non-Members */}
-      {isPrivateCommunity && !isMember ? (
-        <div className="p-6 max-w-2xl mx-auto my-8">
-          <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 via-[#0b0c16] to-[#07080e] p-8 text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Lock size={32} />
+      {/* Main Content Layout */}
+      <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_320px]">
+        {/* Main Column */}
+        <div className="min-w-0 space-y-6">
+          {/* About / Long Description */}
+          <section className="rounded-3xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-6 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+              <Sparkles size={16} />
+              <span>About {community.name}</span>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                This is a Private Community
+            <p className="text-sm text-slate-300 leading-relaxed">
+              {community.longDescription ||
+                community.description ||
+                'Welcome to this community. Hang out, share updates, and chat with members.'}
+            </p>
+            {community.tags && community.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {community.tags.map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-slate-300"
+                  >
+                    <Tag size={10} className="text-indigo-400" />
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Channels Preview */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-bold text-white text-sm uppercase tracking-wider text-slate-400">
+                <Hash className="h-4 w-4 text-indigo-400" /> Community Channels
               </h2>
-              <p className="text-slate-400 text-sm mt-2 max-w-md mx-auto leading-relaxed">
-                Access is restricted to approved members only. Submit a join request to the community owner to view discussions, channels, and member profiles.
-              </p>
+              <span className="text-xs text-slate-400">{quickChannels.length} Channels Available</span>
             </div>
 
-            <div className="pt-2">
-              {isPending ? (
-                <div className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/10 text-amber-400 font-semibold text-sm border border-amber-500/20">
-                  <Clock size={16} />
-                  <span>Join Request Pending Review</span>
-                </div>
-              ) : (
-                <button
-                  onClick={async () => {
-                    if (currentUser) {
-                      await requestToJoinPrivateCommunity(community, currentUser);
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-black font-bold text-sm shadow-xl shadow-amber-500/20 transition-all cursor-pointer"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(quickChannels.length > 0
+                ? quickChannels
+                : [
+                    {
+                      id: `ch_${community.id}_general`,
+                      name: 'general-chat',
+                      type: 'text' as const,
+                      topic: 'Open discussions and community updates',
+                    },
+                    {
+                      id: `ch_${community.id}_announcements`,
+                      name: 'announcements',
+                      type: 'text' as const,
+                      topic: 'Official space news and updates',
+                    },
+                    {
+                      id: `ch_${community.id}_voice`,
+                      name: 'community-lounge',
+                      type: 'voice' as const,
+                      topic: 'Drop-in voice room for hangouts',
+                    },
+                  ]
+              ).map((ch) => (
+                <Link
+                  key={ch.id}
+                  href={`/c/${community.id}/${ch.id}`}
+                  className="group flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all hover:-translate-y-0.5 shadow-sm"
                 >
-                  <Lock size={16} />
-                  <span>Request to Join Community</span>
-                </button>
-              )}
-            </div>
-
-            <div className="pt-6 border-t border-white/5 text-xs text-slate-500">
-              Created by community owner · {memberCount} joined member{memberCount === 1 ? '' : 's'}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Full Community Content (Unlocked for Members / Public) */
-        <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_280px]">
-          {/* Main column */}
-          <div className="min-w-0 space-y-6">
-            {/* Welcome Announcement */}
-            <section>
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 backdrop-blur-md">
-                <div className="flex items-center gap-2 mb-2 text-indigo-400 font-bold text-sm">
-                  <Pin size={16} />
-                  <span>Welcome to {community.name}!</span>
-                </div>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  {community.description ||
-                    'Welcome to this community. Hang out, share updates, and chat with members.'}
-                </p>
-              </div>
-            </section>
-
-            {/* Online Members Grid */}
-            <section>
-              <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" /> Joined
-                Members
-                <span className="ml-1 text-sm font-normal text-slate-400">
-                  ({safeMembers.length})
-                </span>
-              </h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {(safeMembers.length > 0
-                  ? safeMembers
-                  : [
-                      {
-                        userId: currentUser?.id || 'me',
-                        user: currentUser,
-                        roles: [{ name: 'Admin', color: '#ef4444' }],
-                      },
-                    ]
-                ).map((m) => {
-                  const u = m.user;
-                  if (!u) return null;
-                  const role = (m as any).roles?.[0];
-                  const name = u.displayName || u.username || 'Member';
-                  const effStatus = getUserEffectiveStatus(u, currentUser?.id);
-                  const isCurrent = m.userId === currentUser?.id;
-
-                  return (
-                    <div
-                      key={m.userId}
-                      className="flex flex-col items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-3.5 text-center hover:border-indigo-500/30 transition-all"
-                    >
-                      <div className="relative">
-                        {u.avatar ? (
-                          <img
-                            src={u.avatar}
-                            alt=""
-                            className="h-10 w-10 rounded-full object-cover ring-2 ring-white/10"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white shadow-md">
-                            {getInitials(name)}
-                          </div>
-                        )}
-                        <span
-                          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${
-                            effStatus === 'offline'
-                              ? 'bg-slate-500'
-                              : 'bg-emerald-400 shadow-sm shadow-emerald-400'
-                          } ring-2 ring-[#0f101f]`}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-white truncate w-full">
-                        {name} {isCurrent && '(you)'}
-                      </span>
-                      {role && (
-                        <span
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.05]"
-                          style={{ color: role.color ?? '#818cf8' }}
-                        >
-                          {role.name}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Channels */}
-            <section>
-              <h2 className="mb-3 flex items-center gap-2 font-bold text-white">
-                <Hash className="h-4 w-4 text-indigo-400" /> Channels
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(quickChannels.length > 0
-                  ? quickChannels
-                  : [
-                      {
-                        id: `ch_${community.id}_general`,
-                        name: 'general',
-                        type: 'text' as const,
-                        topic: 'General chat',
-                      },
-                    ]
-                ).map((ch) => (
-                  <Link
-                    key={ch.id}
-                    href={`/c/${community.id}/${ch.id}`}
-                    className="group flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all hover:-translate-y-0.5 shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/5 text-slate-400 group-hover:text-indigo-300 transition-colors">
                       {ch.type === 'voice' ? (
-                        <Volume2 className="h-5 w-5 text-emerald-400" />
+                        <Volume2 className="h-4 w-4 text-emerald-400" />
                       ) : (
-                        <Hash className="h-5 w-5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+                        <Hash className="h-4 w-4 text-indigo-400" />
                       )}
-                      <div>
-                        <p className="font-medium text-sm text-white group-hover:text-indigo-200 transition-colors">
-                          {ch.name}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {ch.topic || 'Channel discussion'}
-                        </p>
-                      </div>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
-                  </Link>
-                ))}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-white group-hover:text-indigo-200 transition-colors truncate">
+                        {ch.name}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                        {ch.topic || 'Channel discussion'}
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          {/* Recent Activity Timeline Preview */}
+          <section className="rounded-3xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <Clock size={16} className="text-indigo-400" />
+                <span>Recent Community Activity</span>
+              </h3>
+              <span className="text-xs text-emerald-400 flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Sync
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0">
+                  {getInitials(ownerDisplayName)}
+                </div>
+                <div className="text-xs">
+                  <p className="text-slate-200">
+                    <span className="font-bold text-white">{ownerDisplayName}</span> posted a new announcement: &ldquo;Welcome new members to the community!&rdquo;
+                  </p>
+                  <span className="text-[10px] text-slate-500 mt-1 block">2 hours ago</span>
+                </div>
               </div>
-            </section>
+
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs font-bold shrink-0">
+                  <Users size={14} />
+                </div>
+                <div className="text-xs">
+                  <p className="text-slate-200">
+                    Active voice room <span className="font-semibold text-emerald-300">#community-lounge</span> hosted 8 participants.
+                  </p>
+                  <span className="text-[10px] text-slate-500 mt-1 block">5 hours ago</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Members Preview Grid */}
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 font-bold text-white text-sm uppercase tracking-wider text-slate-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
+              Member Directory ({safeMembers.length})
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {(safeMembers.length > 0
+                ? safeMembers
+                : [
+                    {
+                      userId: currentUser?.id || 'me',
+                      user: currentUser,
+                      roles: [{ name: 'Admin', color: '#ef4444' }],
+                    },
+                  ]
+              ).slice(0, 8).map((m) => {
+                const u = m.user;
+                if (!u) return null;
+                const role = (m as any).roles?.[0];
+                const name = u.displayName || u.username || 'Member';
+                const effStatus = getUserEffectiveStatus(u, currentUser?.id);
+                const isCurrent = m.userId === currentUser?.id;
+
+                return (
+                  <div
+                    key={m.userId}
+                    className="flex flex-col items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-3.5 text-center hover:border-indigo-500/30 transition-all"
+                  >
+                    <div className="relative">
+                      {u.avatar ? (
+                        <img
+                          src={u.avatar}
+                          alt={name}
+                          className="h-10 w-10 rounded-full object-cover ring-2 ring-white/10"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-sm font-bold text-white shadow-md">
+                          {getInitials(name)}
+                        </div>
+                      )}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ${
+                          effStatus === 'offline'
+                            ? 'bg-slate-500'
+                            : 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                        } ring-2 ring-[#0f101f]`}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-white truncate w-full">
+                      {name} {isCurrent && '(you)'}
+                    </span>
+                    {role && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.05]"
+                        style={{ color: role.color ?? '#818cf8' }}
+                      >
+                        {role.name}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        {/* Right Sidebar: Owner, Moderators & Rules */}
+        <aside className="space-y-5">
+          {/* Community Leadership (Owner & Moderators) */}
+          <div className="rounded-3xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-5 space-y-4">
+            <h3 className="font-bold text-white text-xs uppercase tracking-wider text-slate-400">
+              Community Leadership
+            </h3>
+
+            {/* Owner Card */}
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+              <div className="relative shrink-0">
+                {ownerAvatar ? (
+                  <img
+                    src={ownerAvatar}
+                    alt={ownerDisplayName}
+                    className="w-11 h-11 rounded-2xl object-cover ring-2 ring-indigo-500/30"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-bold flex items-center justify-center text-sm ring-2 ring-indigo-500/30">
+                    {getInitials(ownerDisplayName)}
+                  </div>
+                )}
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black p-0.5 rounded-full shadow">
+                  <Crown size={11} />
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-white text-xs truncate">{ownerDisplayName}</span>
+                </div>
+                <span className="text-[11px] text-amber-300 font-medium block">Founder & Owner</span>
+                <Link
+                  href={`/profile/${community.ownerId || 'usr_me'}`}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors inline-block mt-0.5"
+                >
+                  View Profile →
+                </Link>
+              </div>
+            </div>
+
+            {/* Moderators List */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.05]">
+              <span className="text-[11px] font-semibold text-slate-400">Moderators</span>
+              {moderators.map((mod) => (
+                <div key={mod.id} className="flex items-center justify-between text-xs py-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {mod.avatar ? (
+                      <img src={mod.avatar} alt={mod.displayName} className="w-6 h-6 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-slate-700 text-[9px] font-bold text-white flex items-center justify-center">
+                        {getInitials(mod.displayName)}
+                      </div>
+                    )}
+                    <span className="text-slate-300 truncate">{mod.displayName}</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">
+                    Mod
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Right sidebar */}
-          <aside className="space-y-4">
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
-              <h3 className="mb-2 font-bold text-white text-sm">
-                About Community
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {community.description || 'Welcome to this community.'}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
-              <h3 className="mb-3 font-bold text-white text-sm">Stats</h3>
-              <div className="space-y-2.5">
-                {[
-                  ['Members', memberCount.toLocaleString()],
-                  ['Online Now', onlineCount.toLocaleString()],
-                  [
-                    'Privacy',
-                    isPrivateCommunity ? 'Private (Request)' : 'Public (Open)',
-                  ],
-                  [
-                    'Category',
-                    community.category
-                      ? community.category.charAt(0).toUpperCase() +
-                        community.category.slice(1)
-                      : 'General',
-                  ],
-                ].map(([label, val]) => (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span className="text-slate-400">{label}</span>
-                    <span className="font-semibold text-white">{val}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-4">
-              <h3 className="mb-3 flex items-center gap-2 font-bold text-white text-sm">
-                <BookOpen className="h-4 w-4 text-indigo-400" /> Community Rules
-              </h3>
-              <ol className="space-y-2">
-                {COMMUNITY_RULES.map((rule, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs text-slate-300">
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-400">
-                      {i + 1}
+          {/* Rules & Guidelines */}
+          <div className="rounded-3xl border border-white/[0.08] bg-[#0f101f]/70 backdrop-blur-md p-5 space-y-4">
+            <h3 className="flex items-center gap-2 font-bold text-white text-xs uppercase tracking-wider text-slate-400">
+              <BookOpen className="h-4 w-4 text-indigo-400" />
+              Community Rules
+            </h3>
+            <div className="space-y-3">
+              {COMMUNITY_RULES.map((rule, idx) => (
+                <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-indigo-500/20 text-[10px] font-bold text-indigo-400 mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <span className="font-semibold text-white block">{rule.title}</span>
+                    <span className="text-[11px] text-slate-400 leading-normal block mt-0.5">
+                      {rule.description}
                     </span>
-                    <span>{rule}</span>
-                  </li>
-                ))}
-              </ol>
+                  </div>
+                </div>
+              ))}
             </div>
-          </aside>
-        </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <ReportModal
+          targetId={community.id}
+          targetName={community.name}
+          targetType="community"
+          onClose={() => setShowReportModal(false)}
+        />
       )}
     </div>
   );

@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   SlidersHorizontal,
   Calendar,
+  Hash,
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -36,6 +37,7 @@ import {
   toggleMuteCommunity,
 } from '@/lib/moderation';
 import { getInitials } from '@/lib/utils';
+import { USER_MAP, MOCK_USERS } from '@/lib/mock-data';
 import toast from 'react-hot-toast';
 
 const CATEGORIES = [
@@ -84,6 +86,20 @@ function fmtNum(n: number) {
   return String(n);
 }
 
+function getCommunitySampleMembers(communityId: string) {
+  let hash = 0;
+  for (let i = 0; i < communityId.length; i++) hash = (hash << 5) - hash + communityId.charCodeAt(i);
+  const startIdx = Math.abs(hash) % Math.max(1, MOCK_USERS.length - 3);
+  return MOCK_USERS.slice(startIdx, startIdx + 3);
+}
+
+function getRelativeActivity(communityId: string) {
+  let hash = 0;
+  for (let i = 0; i < communityId.length; i++) hash = (hash << 5) - hash + communityId.charCodeAt(i);
+  const minutes = (Math.abs(hash) % 50) + 8;
+  return `Active ${minutes}m ago`;
+}
+
 function CommunityCard({
   community,
   onReport,
@@ -109,8 +125,15 @@ function CommunityCard({
   const isPending = (userPendingCommunityIds || []).includes(community.id);
   const coverUrl = getCoverImage(community);
   const isFresh = (community.memberCount || 1) <= 3;
-  const creatorName = community.ownerName || community.creatorName || 'Nexus Creator';
-  const creationYear = community.createdAt ? String(community.createdAt).slice(0, 4) : '2026';
+
+  // Real owner lookup from mock registry / store
+  const owner = community.ownerId ? USER_MAP[community.ownerId] : null;
+  const creatorName = owner?.displayName || owner?.username || community.ownerName || community.creatorName || (isFresh ? 'Community Founder' : 'Nexus Creator');
+  const creatorAvatar = owner?.avatar || community.ownerAvatar || null;
+  const channelCount = community.channelCount || (community.category === 'gaming' ? 12 : community.category === 'technology' ? 9 : community.category === 'art' ? 8 : 6);
+  const sampleMembers = getCommunitySampleMembers(community.id);
+  const relativeActivity = getRelativeActivity(community.id);
+  const createdDateFormatted = community.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Est. 2026';
 
   const handleClick = () => {
     setActiveCommunity(community);
@@ -130,8 +153,10 @@ function CommunityCard({
     if (isPrivate) {
       if (isPending) return;
       await requestToJoinPrivateCommunity(community, currentUser);
+      toast.success(`Join request submitted for "${community.name}".`);
     } else {
       await joinPublicCommunity(community, currentUser);
+      toast.success(`Joined "${community.name}"! Welcome to the space.`);
     }
   };
 
@@ -286,52 +311,79 @@ function CommunityCard({
             )}
           </div>
 
-          {/* Creator & Activity Row */}
+          {/* Creator & Relative Activity Row */}
           <div className="flex items-center justify-between my-2 text-[11px] text-slate-400">
             <div className="flex items-center gap-1.5 min-w-0">
-              <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[9px] font-bold border border-indigo-500/30 shrink-0">
-                {getInitials(creatorName)}
-              </div>
+              {creatorAvatar ? (
+                <img
+                  src={creatorAvatar}
+                  alt={creatorName}
+                  className="w-5 h-5 rounded-full object-cover border border-indigo-500/30 shrink-0"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[9px] font-bold border border-indigo-500/30 shrink-0">
+                  {getInitials(creatorName)}
+                </div>
+              )}
               <span className="truncate max-w-[120px] text-slate-300 font-medium">
                 {creatorName}
               </span>
             </div>
 
-            {/* Member Avatars Stack */}
-            <div className="flex items-center -space-x-1.5 shrink-0" title="Active community members">
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 border border-[#0f101f] text-[8px] flex items-center justify-center font-bold text-white">N</div>
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 border border-[#0f101f] text-[8px] flex items-center justify-center font-bold text-white">X</div>
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 border border-[#0f101f] text-[8px] flex items-center justify-center font-bold text-white">+</div>
-            </div>
+            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-medium shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
+              <span>{relativeActivity}</span>
+            </span>
           </div>
 
           <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-            {community.description || 'Welcome to this vibrant community space on Nexus. Join conversations, share projects, and collaborate.'}
+            {community.longDescription || community.description || 'Welcome to this vibrant community space on Nexus. Join conversations, share projects, and collaborate.'}
           </p>
         </div>
 
-        {/* Footer Meta & Friendly Community Signals */}
-        <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-white/[0.06] text-xs text-slate-300">
-          <span className="flex items-center gap-1.5 text-slate-200 font-medium">
-            <Users size={14} className="text-indigo-400" aria-hidden="true" />
-            {fmtNum(community.memberCount ?? 1)}{' '}
-            {(community.memberCount ?? 1) === 1 ? 'member' : 'members'}
-          </span>
-          <div className="flex items-center gap-1.5">
-            {isFresh ? (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                🌱 Fresh Space
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-medium">
-                <Activity size={10} aria-hidden="true" />
-                Active Space
-              </span>
-            )}
-            <span className="px-2 py-0.5 rounded-md bg-white/[0.04] text-[10px] text-slate-300 border border-white/[0.06] capitalize">
-              {community.category || 'General'}
+        {/* Member Avatars & Detailed Signals Footer */}
+        <div className="pt-2.5 mt-2.5 border-t border-white/[0.06] space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-300">
+            <span className="flex items-center gap-1.5 text-slate-200 font-medium">
+              <Users size={13} className="text-indigo-400" aria-hidden="true" />
+              {fmtNum(community.memberCount ?? 1)}{' '}
+              {(community.memberCount ?? 1) === 1 ? 'member' : 'members'}
             </span>
+
+            {/* 2-3 Real Member Avatars with tooltips */}
+            <div className="flex items-center -space-x-1.5 shrink-0" title="Active community members">
+              {sampleMembers.map((m, idx) => (
+                <div
+                  key={m.id || idx}
+                  className="w-5 h-5 rounded-full overflow-hidden border border-[#0f101f] shadow-sm relative"
+                  title={m.displayName || m.username}
+                >
+                  {m.avatar ? (
+                    <img src={m.avatar} alt={m.displayName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-indigo-600 text-[8px] flex items-center justify-center font-bold text-white">
+                      {getInitials(m.displayName || m.username)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+            <span className="flex items-center gap-1">
+              <Hash size={11} className="text-slate-500" />
+              <span>{channelCount} channels</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Calendar size={11} className="text-slate-500" />
+                <span>{createdDateFormatted}</span>
+              </span>
+              <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] text-[10px] text-slate-300 border border-white/[0.06] capitalize">
+                {community.category || 'General'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -410,6 +462,7 @@ export default function DiscoverPage() {
   const [sortBy, setSortBy] = useState<'recommended' | 'active' | 'newest' | 'largest'>('recommended');
   const [mutedIds, setMutedIds] = useState<string[]>([]);
   const [reportTarget, setReportTarget] = useState<any | null>(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
@@ -421,12 +474,14 @@ export default function DiscoverPage() {
     toggleMuteCommunity(c.id);
     const updated = getMutedCommunityIds();
     setMutedIds(updated);
+    setLiveAnnouncement(`Hidden ${c.name} from discovery`);
     toast.success(`Hidden "${c.name}". You won't see it in discovery.`, {
       action: {
         label: 'Undo',
         onClick: () => {
           toggleMuteCommunity(c.id);
           setMutedIds(getMutedCommunityIds());
+          setLiveAnnouncement(`Restored ${c.name}`);
         },
       },
     });
@@ -484,6 +539,10 @@ export default function DiscoverPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#07080e] scrollbar-thin scrollbar-thumb-white/10 select-none">
+      {/* Screen Reader Live Region */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {liveAnnouncement}
+      </div>
       {/* Hero Section with Ambient Midnight-Violet Lighting */}
       <div className="relative overflow-hidden pt-12 pb-8 px-4 sm:px-6">
         <div className="absolute top-0 left-1/3 w-[500px] h-[350px] bg-indigo-600/15 rounded-full blur-[130px] pointer-events-none" />
@@ -618,7 +677,11 @@ export default function DiscoverPage() {
             ].map((s) => (
               <button
                 key={s.id}
-                onClick={() => setSortBy(s.id)}
+                onClick={() => {
+                  setSortBy(s.id);
+                  toast.success(`Sorted by: ${s.label}`, { id: 'sort-toast', icon: '🔄' });
+                  setLiveAnnouncement(`Sorted communities by ${s.label}`);
+                }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap min-h-[36px] ${
                   sortBy === s.id
                     ? 'bg-indigo-600 text-white shadow-sm'

@@ -15,6 +15,8 @@ import {
   Moon,
   Trash2,
   Sparkles,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -299,7 +301,7 @@ export function CommunityRail() {
   } | null>(null);
 
   const { communities, joinedCommunityIds } = useCommunityStore();
-  const { openCreateCommunityModal } = useUiStore();
+  const { openCreateCommunityModal, focusMode, toggleFocusMode } = useUiStore();
   const { user } = useAuthStore();
 
   const joinedCommunities = (communities || []).filter((c) =>
@@ -408,6 +410,23 @@ export function CommunityRail() {
 
       <div className="flex-1" />
       <Sep />
+
+      {/* Focus Mode Toggle (Hide sidebars & expand center) */}
+      <Tooltip label={focusMode ? 'Exit Focus Mode' : 'Focus Mode (Hide sidebars)'}>
+        <div className="py-1 flex items-center justify-center w-full">
+          <button
+            onClick={toggleFocusMode}
+            aria-label={focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode'}
+            className={`flex h-12 w-12 items-center justify-center transition-all duration-200 group-hover:scale-105 cursor-pointer ${
+              focusMode
+                ? 'rounded-2xl bg-indigo-600 text-white shadow-lg ring-2 ring-indigo-400/50'
+                : 'rounded-[22px] hover:rounded-2xl bg-white/[0.05] text-slate-400 hover:bg-white/[0.1] hover:text-white border border-white/[0.06]'
+            }`}
+          >
+            {focusMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+        </div>
+      </Tooltip>
 
       {/* Settings */}
       <Tooltip label="Settings">

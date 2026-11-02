@@ -42,6 +42,16 @@ export default function MessagesIndexPage() {
     }
   }, [showNewMessageModal, currentUser?.id, fetchAllUsers]);
 
+  // Check URL query parameters for ?new=true
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true') {
+        setShowNewMessageModal(true);
+      }
+    }
+  }, []);
+
   const filteredConversations = conversations.filter((c) => {
     const otherUid = c.participants.find((p) => p !== currentUser?.id) || c.participants[0];
     const details = c.participantDetails?.[otherUid];
@@ -65,26 +75,28 @@ export default function MessagesIndexPage() {
     router.push(`/messages/${convId}`);
   };
 
+  const hasEligibleContacts = (connectedMembers && connectedMembers.length > 0) || allUsers.length > 0;
+
   return (
-    <div className="flex h-full flex-col md:flex-row bg-[hsl(var(--bg-base))]">
-      {/* Conversation List (Visible on mobile or as selection view) */}
+    <div className="flex h-full flex-col md:flex-row bg-[hsl(var(--bg-base))] relative">
+      {/* Conversation List Panel */}
       <div className="w-full md:w-80 flex-shrink-0 border-r border-white/5 flex flex-col bg-[hsl(var(--bg-raised))] h-full">
-        {/* Header */}
+        {/* Header with Persistent Action */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <MessageSquare size={18} className="text-indigo-400" />
-            <h2 className="font-bold text-white text-sm">Direct Messages</h2>
+            <h1 className="font-bold text-white text-sm">Direct Messages</h1>
           </div>
-          {filteredConversations.length > 0 && (
-            <button
-              onClick={() => setShowNewMessageModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shadow-sm cursor-pointer"
-              title="Start new direct message"
-              aria-label="Start new direct message"
-            >
-              <Plus size={14} /> New
-            </button>
-          )}
+          {/* Persistent Action on Mobile & Desktop if active */}
+          <button
+            onClick={() => setShowNewMessageModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shadow-sm cursor-pointer min-h-[36px]"
+            title="Start new direct message"
+            aria-label="Start new direct message"
+          >
+            <Plus size={14} />
+            <span>New</span>
+          </button>
         </div>
 
         {/* Search */}
@@ -104,14 +116,40 @@ export default function MessagesIndexPage() {
         {/* DM List */}
         <div className="flex-1 overflow-y-auto px-2 space-y-1">
           {filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 px-3 text-center">
-              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-2.5 text-indigo-400">
-                <MessageSquare size={18} />
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-3 text-indigo-400">
+                <MessageSquare size={20} />
               </div>
               <p className="text-xs font-semibold text-slate-200">No active chats</p>
-              <p className="text-[11px] text-slate-400 mt-0.5 max-w-[200px] leading-relaxed">
+              <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] leading-relaxed">
                 Your 1-on-1 direct messages will appear here.
               </p>
+
+              {/* Mobile conversion CTA in empty state */}
+              <div className="mt-5 md:hidden w-full max-w-[240px]">
+                {!hasEligibleContacts ? (
+                  <div className="space-y-2.5">
+                    <p className="text-[11px] text-amber-200/90 leading-normal">
+                      Connect with a member first to start a DM.
+                    </p>
+                    <button
+                      onClick={() => openConnectionModal(true)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px]"
+                    >
+                      <UserPlus size={15} />
+                      <span>Find connections</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowNewMessageModal(true)}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px]"
+                  >
+                    <Plus size={15} />
+                    <span>Start a conversation</span>
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             filteredConversations.map((c) => {
@@ -128,7 +166,7 @@ export default function MessagesIndexPage() {
                 <button
                   key={c.id}
                   onClick={() => router.push(`/messages/${c.id}`)}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl text-left hover:bg-white/5 transition-colors group"
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl text-left hover:bg-white/5 transition-colors group cursor-pointer"
                 >
                   <div className="relative shrink-0">
                     {details.avatar ? (
@@ -166,9 +204,19 @@ export default function MessagesIndexPage() {
         </div>
       </div>
 
-      {/* Center Hero/Empty State */}
+      {/* Mobile 56px Floating Action Button (FAB) above Bottom Nav */}
+      <button
+        onClick={() => setShowNewMessageModal(true)}
+        aria-label="Start new direct message"
+        className="md:hidden fixed bottom-20 right-5 z-40 h-14 w-14 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 shadow-xl shadow-indigo-600/40 border border-indigo-400/30 flex items-center justify-center text-white active:scale-95 transition-transform min-h-[56px] min-w-[56px] cursor-pointer"
+        title="New Message"
+      >
+        <MessageSquare size={22} aria-hidden="true" />
+      </button>
+
+      {/* Desktop Center Hero/Empty State */}
       <div className="hidden md:flex flex-1 flex-col items-center justify-center p-8 text-center bg-[#07080e]">
-        {connectedMembers.length === 0 && allUsers.length === 0 ? (
+        {!hasEligibleContacts ? (
           <div className="max-w-sm space-y-4">
             <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-950/40">
               <Users size={28} />
@@ -217,7 +265,8 @@ export default function MessagesIndexPage() {
               </div>
               <button
                 onClick={() => setShowNewMessageModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Close modal"
               >
                 <X size={16} />
               </button>
@@ -244,20 +293,20 @@ export default function MessagesIndexPage() {
                 <div className="py-8 text-center text-xs text-slate-500">Loading members...</div>
               ) : filteredUsers.length === 0 ? (
                 <div className="py-8 px-4 text-center">
-                  <Lock size={20} className="mx-auto text-brand-400 mb-2" />
-                  <p className="text-xs font-semibold text-white mb-1">No Connected Members</p>
-                  <p className="text-[11px] text-slate-400 mb-4 max-w-xs mx-auto">
-                    In Nexus, direct messaging requires a mutual connection. Discover users and send connection requests first.
+                  <Lock size={22} className="mx-auto text-indigo-400 mb-2" />
+                  <p className="text-xs font-semibold text-white mb-1">No Connected Members Found</p>
+                  <p className="text-[11px] text-slate-400 mb-4 max-w-xs mx-auto leading-relaxed">
+                    Connect with a member first to start a DM.
                   </p>
                   <button
                     onClick={() => {
                       setShowNewMessageModal(false);
-                      useConnectionStore.getState().setIsModalOpen(true);
+                      openConnectionModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/25 transition-all cursor-pointer min-h-[44px]"
                   >
-                    <UserPlus size={13} />
-                    <span>Find Members to Connect</span>
+                    <UserPlus size={14} />
+                    <span>Find connections</span>
                   </button>
                 </div>
               ) : (
@@ -267,7 +316,7 @@ export default function MessagesIndexPage() {
                     <button
                       key={u.id}
                       onClick={() => handleStartDM(u)}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/8 transition-colors group text-left"
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/8 transition-colors group text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="relative shrink-0">
