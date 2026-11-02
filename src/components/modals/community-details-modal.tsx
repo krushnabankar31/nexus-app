@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -24,13 +24,21 @@ import {
   AlertCircle,
   RefreshCw,
   ExternalLink,
+  Settings,
+  Shield,
 } from 'lucide-react';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { getInitials } from '@/lib/utils';
-import { USER_MAP, MOCK_USERS } from '@/lib/mock-data';
+import { MOCK_USERS } from '@/lib/mock-data';
 import { ReportModal } from '@/components/modals/report-modal';
 import { toggleMuteCommunity } from '@/lib/moderation';
+import {
+  getCanonicalCommunityOwner,
+  formatPublicUsername,
+  getMeaningfulCommunityDescription,
+  getCommunityMembershipState,
+} from '@/lib/community-utils';
 import toast from 'react-hot-toast';
 
 const COMMUNITY_RULES = [
@@ -89,6 +97,7 @@ interface CommunityDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onHideCommunity?: (c: any) => void;
+  triggerElement?: HTMLElement | null;
 }
 
 export function CommunityDetailsModal({
@@ -96,6 +105,7 @@ export function CommunityDetailsModal({
   isOpen,
   onClose,
   onHideCommunity,
+  triggerElement,
 }: CommunityDetailsModalProps) {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -105,6 +115,7 @@ export function CommunityDetailsModal({
     joinPublicCommunity,
     requestToJoinPrivateCommunity,
     setActiveCommunity,
+    members,
   } = useCommunityStore();
 
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -113,63 +124,129 @@ export function CommunityDetailsModal({
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
-  useEffect(() => {
-    if (isOpen && community) {
-      setIsLoadingDetails(true);
-      setLoadError(null);
-      // Simulate/fetch details with smooth animation
-      const timer = setTimeout(() => {
-        setIsLoadingDetails(false);
-        setLiveAnnouncement(`Viewing details for ${community.name}`);
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, community]);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
-  // Handle escape key
+  // Background scroll locking and focus management
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
+    if (!isOpen) return;
+
+    previousActiveElementRef.current = triggerElement || (document.activeElement as HTMLElement | null);
+    const scrollY = window.scrollY;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Focus first focusable control inside modal
+    const focusTimer = setTimeout(() => {
+      if (modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length > 0) {
+          focusable[0].focus();
+        }
+      }
+    }, 50);
+
+    return () => {
+      clearTimeout(focusTimer);
+      document.body.style.overflow = originalOverflow;
+      window.scrollTo(0, scrollY);
+      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+        previousActiveElementRef.current.focus();
       }
     };
+  }, [isOpen, triggerElement]);
+
+  // Escape key and Tab focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+
+        const firstElement = focusables[0];
+        const lastElement = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Details loading simulation
+  useEffect(() => {
+    if (isOpen && community) {
+      setIsLoadingDetails(true);
+      setLoadError(null);
+      const timer = setTimeout(() => {
+        setIsLoadingDetails(false);
+        setLiveAnnouncement(`Viewing details for ${community.name}`);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, community]);
+
   if (!isOpen || !community) return null;
 
-  const isOwner = !!(currentUser?.id && community.ownerId === currentUser.id);
-  const isJoined = isOwner || (joinedCommunityIds || []).includes(community.id);
+  // Canonical owner lookup (single source of truth)
+  const canonicalOwner = getCanonicalCommunityOwner(community, currentUser);
+  const descriptions = getMeaningfulCommunityDescription(community);
+
+  // Membership state: 'visitor' | 'pending' | 'member' | 'admin'
+  const membershipState = getCommunityMembershipState(
+    community,
+    currentUser,
+    joinedCommunityIds,
+    userPendingCommunityIds,
+    members
+  );
+
+  const isJoined = membershipState === 'member' || membershipState === 'admin';
+  const isAdmin = membershipState === 'admin';
+  const isPending = membershipState === 'pending';
   const isPrivate = community.requiresApproval || community.isPrivate || !community.isPublic;
-  const isPending = (userPendingCommunityIds || []).includes(community.id);
+
   const coverUrl = getCoverImage(community);
   const relativeActivity = getRelativeActivity(community.id);
   const exactMemberCount = community.memberCount ?? 1;
 
-  // Real owner lookup
-  const owner = community.ownerId ? USER_MAP[community.ownerId] : null;
-  const creatorName =
-    owner?.displayName ||
-    owner?.username ||
-    community.ownerName ||
-    community.creatorName ||
-    (isOwner ? currentUser?.displayName || 'You' : 'Aria Chen');
-  const creatorAvatar = owner?.avatar || community.ownerAvatar || null;
-  const creatorUsername = owner?.username || (community.ownerId ? community.ownerId.replace(/^usr_/, '') : 'creator');
+  // Safe moderator list (never leaks internal IDs)
+  const moderators = MOCK_USERS.slice(1, 3).map((u) => ({
+    ...u,
+    cleanUsername: formatPublicUsername(u.username),
+  }));
 
-  // Moderators
-  const moderators = MOCK_USERS.slice(1, 3);
+  // Member preview strictly bounded by member count
+  const maxAvatars = Math.min(exactMemberCount, 4);
+  const memberPreview = MOCK_USERS.slice(0, maxAvatars);
 
-  // Exact member preview (never show 3 avatars for 1 or 2 members)
-  const maxAvatars = Math.min(exactMemberCount, 3);
-  let hash = 0;
-  for (let i = 0; i < community.id.length; i++) hash = (hash << 5) - hash + community.id.charCodeAt(i);
-  const startIdx = Math.abs(hash) % Math.max(1, MOCK_USERS.length - 3);
-  const memberPreview = MOCK_USERS.slice(startIdx, startIdx + maxAvatars);
-
-  // Default channels preview
-  const channelCount = community.channelCount || (community.category === 'gaming' ? 12 : community.category === 'technology' ? 9 : community.category === 'art' ? 8 : 6);
+  // Channels preview
+  const channelCount =
+    community.channelCount ||
+    (community.category === 'gaming' ? 12 : community.category === 'technology' ? 9 : community.category === 'art' ? 8 : 6);
   const previewChannels = [
     { id: 'general', name: 'general-chat', type: 'text' as const, topic: 'Open conversations & community hangouts' },
     { id: 'announcements', name: 'announcements', type: 'text' as const, topic: 'Official news and community updates' },
@@ -197,34 +274,56 @@ export function CommunityDetailsModal({
         },
       });
     }
-    onClose();
+    setLiveAnnouncement(`Community ${community.name} hidden`);
   };
 
-  const handleJoinOrRequest = async () => {
+  const handlePrimaryAction = async () => {
+    // If already joined or admin, open the space immediately
+    if (isJoined || isAdmin) {
+      setActiveCommunity(community);
+      onClose();
+      if (isAdmin) {
+        router.push(`/c/${community.id}/admin`);
+      } else {
+        router.push(`/c/${community.id}`);
+      }
+      return;
+    }
+
+    if (isPending) {
+      toast('Your join request is pending moderator approval.', { icon: '⏳' });
+      return;
+    }
+
     if (!currentUser) {
+      toast.error('Please sign in to join communities.');
       router.push('/login');
       return;
     }
+
     setIsActionLoading(true);
     try {
       if (isPrivate) {
-        if (isPending) return;
-        await requestToJoinPrivateCommunity(community, currentUser);
-        toast.success(`Join request submitted for "${community.name}". Moderators will review your profile.`);
-        setLiveAnnouncement(`Join request submitted for ${community.name}`);
+        const success = await requestToJoinPrivateCommunity(community, currentUser);
+        if (success) {
+          toast.success(`Request submitted to join ${community.name}!`);
+          setLiveAnnouncement(`Join request sent for ${community.name}`);
+        }
       } else {
-        await joinPublicCommunity(community, currentUser);
-        toast.success(`Joined "${community.name}"! Welcome to the space.`);
-        setLiveAnnouncement(`Successfully joined ${community.name}`);
+        const success = await joinPublicCommunity(community, currentUser);
+        if (success) {
+          toast.success(`Joined ${community.name}! Welcome aboard.`);
+          setLiveAnnouncement(`Successfully joined ${community.name}`);
+        }
       }
-    } catch (e) {
-      toast.error('Failed to update membership. Please try again.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to complete action.');
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  const handleOpenFullSpace = () => {
+  const handleOpenSpace = () => {
     setActiveCommunity(community);
     onClose();
     router.push(`/c/${community.id}`);
@@ -237,14 +336,17 @@ export function CommunityDetailsModal({
       aria-labelledby="community-details-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
     >
-      {/* Live announcement region */}
+      {/* Live announcement region for screen readers */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {liveAnnouncement}
       </div>
 
-      <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0c16] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        ref={modalRef}
+        className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0c16] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+      >
         {/* Cover Header */}
-        <div className="relative h-44 sm:h-52 w-full flex-shrink-0 overflow-hidden bg-slate-900">
+        <div className="relative h-40 sm:h-52 w-full flex-shrink-0 overflow-hidden bg-slate-900">
           <img
             src={coverUrl}
             alt=""
@@ -259,7 +361,7 @@ export function CommunityDetailsModal({
               onClick={handleShareLink}
               title="Share community link"
               aria-label="Share community link"
-              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
+              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[38px] min-h-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <Share2 size={15} />
             </button>
@@ -267,7 +369,7 @@ export function CommunityDetailsModal({
               onClick={handleMute}
               title="Hide / Mute community"
               aria-label="Hide community from discovery"
-              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
+              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[38px] min-h-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <EyeOff size={15} />
             </button>
@@ -275,21 +377,21 @@ export function CommunityDetailsModal({
               onClick={() => setShowReportModal(true)}
               title="Report community"
               aria-label="Report community"
-              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-rose-400 border border-white/10 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
+              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-rose-400 border border-white/10 transition-colors cursor-pointer min-w-[38px] min-h-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <Flag size={15} />
             </button>
             <button
               onClick={onClose}
               aria-label="Close community details"
-              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
+              className="p-2 rounded-xl bg-black/50 hover:bg-black/70 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer min-w-[38px] min-h-[38px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <X size={16} />
             </button>
           </div>
 
           {/* Privacy & Category Badges */}
-          <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 z-20">
+          <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 z-20 flex-wrap">
             {isPrivate ? (
               <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-200 text-xs font-semibold shadow-sm">
                 <Lock size={11} aria-hidden="true" /> Private Community
@@ -308,7 +410,7 @@ export function CommunityDetailsModal({
           <div className="absolute -bottom-2 left-6 right-6 flex items-end justify-between">
             <div className="flex items-end gap-3.5">
               <div
-                className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl border-2 border-[#0b0c16] shadow-2xl flex items-center justify-center text-3xl shrink-0 overflow-hidden"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[#0b0c16] shadow-2xl flex items-center justify-center text-3xl shrink-0 overflow-hidden"
                 style={{
                   background: community.accentColor
                     ? `linear-gradient(135deg, ${community.accentColor}, #4338ca)`
@@ -318,15 +420,15 @@ export function CommunityDetailsModal({
                 {community.icon && community.icon.startsWith('http') ? (
                   <img src={community.icon} alt="" className="w-full h-full object-cover rounded-2xl" />
                 ) : (
-                  <span>{community.icon || '🌐'}</span>
+                  <span>{community.icon || '💬'}</span>
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 space-y-6">
+        {/* Modal Scrollable Body - with bottom padding ensuring footer never overlaps content */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 pb-28 sm:pb-8 scrollbar-thin scrollbar-thumb-white/10 space-y-6">
           {isLoadingDetails ? (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
               <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
@@ -341,7 +443,7 @@ export function CommunityDetailsModal({
                 onClick={() => {
                   setLoadError(null);
                   setIsLoadingDetails(true);
-                  setTimeout(() => setIsLoadingDetails(false), 300);
+                  setTimeout(() => setIsLoadingDetails(false), 200);
                 }}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-semibold cursor-pointer transition-colors"
               >
@@ -351,7 +453,7 @@ export function CommunityDetailsModal({
             </div>
           ) : (
             <>
-              {/* Title & Signals Row */}
+              {/* Title & Membership Status Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                 <div>
                   <div className="flex items-center gap-2">
@@ -369,50 +471,39 @@ export function CommunityDetailsModal({
                       <Users size={13} className="text-indigo-400" />
                       {exactMemberCount.toLocaleString()} {exactMemberCount === 1 ? 'member' : 'members'}
                     </span>
-                    <span>·</span>
+                    <span>•</span>
                     <span className="flex items-center gap-1 text-emerald-400 font-medium">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       {relativeActivity}
                     </span>
-                    <span>·</span>
+                    <span>•</span>
                     <span className="text-slate-400">
                       {channelCount} channels
                     </span>
                   </div>
                 </div>
 
-                {/* Primary CTA */}
+                {/* Identity & Membership Pill (Non-duplicate on mobile) */}
                 <div className="shrink-0 flex items-center gap-2">
-                  {isJoined ? (
-                    <button
-                      onClick={handleOpenFullSpace}
-                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer min-h-[42px]"
-                    >
-                      <CheckCircle2 size={15} className="text-emerald-400" />
-                      <span>Joined · Enter Space →</span>
-                    </button>
-                  ) : isPrivate && isPending ? (
-                    <span className="px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 min-h-[42px]">
-                      <Clock size={14} />
+                  {isAdmin ? (
+                    <span className="px-3.5 py-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <Crown size={13} className="text-amber-400" />
+                      <span>Owner / Admin</span>
+                    </span>
+                  ) : isJoined ? (
+                    <span className="px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <CheckCircle2 size={14} />
+                      <span>Member ✓</span>
+                    </span>
+                  ) : isPending ? (
+                    <span className="px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                      <Clock size={13} />
                       <span>Request Pending</span>
                     </span>
-                  ) : isPrivate ? (
-                    <button
-                      onClick={handleJoinOrRequest}
-                      disabled={isActionLoading}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 disabled:opacity-50 text-black font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer min-h-[42px]"
-                    >
-                      <Lock size={14} />
-                      <span>{isActionLoading ? 'Submitting...' : 'Request to Join'}</span>
-                    </button>
                   ) : (
-                    <button
-                      onClick={handleJoinOrRequest}
-                      disabled={isActionLoading}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer min-h-[42px]"
-                    >
-                      {isActionLoading ? 'Joining...' : '+ Join Community'}
-                    </button>
+                    <span className="px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium">
+                      {isPrivate ? 'Private Space' : 'Public Space'}
+                    </span>
                   )}
                 </div>
               </div>
@@ -438,21 +529,25 @@ export function CommunityDetailsModal({
                   <Sparkles size={14} className="text-indigo-400" />
                   <span>About Space</span>
                 </h3>
-                <p className="text-xs text-slate-200 leading-relaxed">
-                  {community.longDescription || community.description || 'Welcome to this vibrant community space on Nexus. Join conversations, share projects, and collaborate with members.'}
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  {descriptions.longDescription}
                 </p>
+
                 {community.tags && community.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {community.tags.map((t: string) => (
-                      <span key={t} className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-slate-400">
-                        #{t}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                    {community.tags.map((tag: string) => (
+                      <span
+                        key={tag}
+                        className="px-2.5 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-medium"
+                      >
+                        #{tag}
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Community Leadership Roster */}
+              {/* Community Leadership (Founder & Moderators) */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Crown size={14} className="text-amber-400" />
@@ -460,64 +555,76 @@ export function CommunityDetailsModal({
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Founder Card */}
+                  {/* Canonical Founder Card */}
                   <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                    {creatorAvatar ? (
+                    {canonicalOwner.avatar ? (
                       <img
-                        src={creatorAvatar}
-                        alt={creatorName}
-                        className="w-10 h-10 rounded-xl object-cover ring-1 ring-amber-500/40 shrink-0"
+                        src={canonicalOwner.avatar}
+                        alt={canonicalOwner.displayName}
+                        className="w-10 h-10 rounded-full object-cover ring-2 ring-amber-500/40 shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs font-bold shrink-0">
-                        {getInitials(creatorName)}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                        {getInitials(canonicalOwner.displayName)}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white truncate">{creatorName}</span>
+                        <span className="text-xs font-bold text-white truncate">{canonicalOwner.displayName}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/25">
-                          Owner
+                          {canonicalOwner.role}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 truncate">@{creatorUsername}</p>
+                      {/* PRIVACY SAFE: Never show raw internal UIDs; only show formatted human username if available */}
+                      {canonicalOwner.username && (
+                        <p className="text-[11px] text-slate-400 truncate">@{canonicalOwner.username}</p>
+                      )}
                       <Link
-                        href={`/profile/${community.ownerId || 'usr_me'}`}
+                        href={`/profile/${canonicalOwner.id || 'usr_me'}`}
                         onClick={onClose}
-                        className="text-[10px] text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 mt-0.5"
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 mt-0.5 cursor-pointer font-medium"
                       >
-                        <span>View profile</span>
+                        <span>View public profile</span>
                         <ArrowRight size={10} />
                       </Link>
                     </div>
                   </div>
 
-                  {/* Moderator Card */}
-                  {moderators[0] && (
-                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                      {moderators[0].avatar ? (
+                  {/* Moderator Roster */}
+                  {moderators.map((mod) => (
+                    <div key={mod.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                      {mod.avatar ? (
                         <img
-                          src={moderators[0].avatar}
-                          alt={moderators[0].displayName}
-                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-indigo-500/30 shrink-0"
+                          src={mod.avatar}
+                          alt={mod.displayName}
+                          className="w-10 h-10 rounded-full object-cover ring-2 ring-indigo-500/30 shrink-0"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0">
-                          {getInitials(moderators[0].displayName)}
+                        <div className="w-10 h-10 rounded-full bg-indigo-600/30 text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                          {getInitials(mod.displayName)}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white truncate">{moderators[0].displayName}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 font-semibold border border-indigo-500/25">
-                            Mod
+                          <span className="text-xs font-semibold text-white truncate">{mod.displayName}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 font-medium border border-indigo-500/25">
+                            Moderator
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 truncate">@{moderators[0].username}</p>
-                        <span className="text-[10px] text-slate-500 mt-0.5 block">Community Safety</span>
+                        {mod.cleanUsername && (
+                          <p className="text-[11px] text-slate-400 truncate">@{mod.cleanUsername}</p>
+                        )}
+                        <Link
+                          href={`/profile/${mod.id}`}
+                          onClick={onClose}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 mt-0.5 cursor-pointer font-medium"
+                        >
+                          <span>View public profile</span>
+                          <ArrowRight size={10} />
+                        </Link>
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
 
@@ -528,13 +635,15 @@ export function CommunityDetailsModal({
                     <Hash size={14} className="text-indigo-400" />
                     <span>Channels Preview ({channelCount})</span>
                   </h3>
-                  <button
-                    onClick={handleOpenFullSpace}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium cursor-pointer"
-                  >
-                    <span>View all channels</span>
-                    <ArrowRight size={11} />
-                  </button>
+                  {isJoined && (
+                    <button
+                      onClick={handleOpenSpace}
+                      className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium cursor-pointer"
+                    >
+                      <span>Open space channels</span>
+                      <ArrowRight size={11} />
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -615,34 +724,72 @@ export function CommunityDetailsModal({
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-white/[0.08] bg-[#07080e]/80 backdrop-blur-md flex items-center justify-between gap-3">
-          <button
-            onClick={handleOpenFullSpace}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
-          >
-            <ExternalLink size={14} />
-            <span>Open Space Dashboard</span>
-          </button>
+        {/* Modal Sticky Footer - Mobile thumb-friendly with safe-area padding */}
+        <div className="p-3.5 sm:p-4 pb-[max(0.875rem,env(safe-area-inset-bottom))] border-t border-white/[0.08] bg-[#07080e]/95 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+          {/* Secondary Action: Only visible to joined members or admins */}
+          {isJoined ? (
+            <button
+              onClick={handleOpenSpace}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer min-h-[44px]"
+            >
+              <ExternalLink size={14} />
+              <span>Open Space Dashboard</span>
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 px-1 hidden sm:inline">
+              {isPrivate ? 'Approval required before entry' : 'Open membership'}
+            </span>
+          )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer min-h-[38px]"
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer min-h-[44px]"
             >
               Close
             </button>
-            {!isJoined && !isPending && (
+
+            {/* Single primary CTA state */}
+            {isAdmin ? (
               <button
-                onClick={handleJoinOrRequest}
-                disabled={isActionLoading}
-                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer min-h-[38px] ${
-                  isPrivate
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black hover:opacity-90'
-                    : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90'
-                }`}
+                onClick={handlePrimaryAction}
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5"
               >
-                {isPrivate ? 'Request to Join' : '+ Join'}
+                <Settings size={14} />
+                <span>Manage Community</span>
+              </button>
+            ) : isJoined ? (
+              <button
+                onClick={handlePrimaryAction}
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 size={14} />
+                <span>Open Community</span>
+              </button>
+            ) : isPending ? (
+              <button
+                disabled
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[44px] opacity-75 cursor-not-allowed"
+              >
+                <Clock size={14} />
+                <span>Request Pending</span>
+              </button>
+            ) : isPrivate ? (
+              <button
+                onClick={handlePrimaryAction}
+                disabled={isActionLoading}
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 disabled:opacity-50 text-black font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px]"
+              >
+                <Lock size={14} />
+                <span>{isActionLoading ? 'Submitting...' : 'Request to Join'}</span>
+              </button>
+            ) : (
+              <button
+                onClick={handlePrimaryAction}
+                disabled={isActionLoading}
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5"
+              >
+                <span>{isActionLoading ? 'Joining...' : '+ Join Community'}</span>
               </button>
             )}
           </div>

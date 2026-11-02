@@ -39,6 +39,10 @@ import {
 } from '@/lib/moderation';
 import { getInitials } from '@/lib/utils';
 import { USER_MAP, MOCK_USERS } from '@/lib/mock-data';
+import {
+  getCanonicalCommunityOwner,
+  getMeaningfulCommunityDescription,
+} from '@/lib/community-utils';
 import toast from 'react-hot-toast';
 
 const CATEGORIES = [
@@ -130,7 +134,7 @@ function CommunityCard({
   onHide,
 }: {
   community: any;
-  onView: (c: any) => void;
+  onView: (c: any, el?: HTMLElement) => void;
   onReport: (c: any) => void;
   onHide: (c: any) => void;
 }) {
@@ -149,23 +153,20 @@ function CommunityCard({
   const isPending = (userPendingCommunityIds || []).includes(community.id);
   const coverUrl = getCoverImage(community);
 
-  // Real owner lookup from mock registry / store
-  const owner = community.ownerId ? USER_MAP[community.ownerId] : null;
-  const creatorName =
-    owner?.displayName ||
-    owner?.username ||
-    community.ownerName ||
-    community.creatorName ||
-    (isOwner ? currentUser?.displayName || 'You' : getFallbackCreatorName(community.id));
-  const creatorAvatar = owner?.avatar || community.ownerAvatar || null;
+  // Canonical owner lookup from shared single source of truth
+  const canonicalOwner = getCanonicalCommunityOwner(community, currentUser);
+  const creatorName = canonicalOwner.displayName;
+  const creatorAvatar = canonicalOwner.avatar;
+  const descriptions = getMeaningfulCommunityDescription(community);
+
   const channelCount = community.channelCount || (community.category === 'gaming' ? 12 : community.category === 'technology' ? 9 : community.category === 'art' ? 8 : 6);
   const sampleMembers = getCommunitySampleMembers(community);
   const relativeActivity = getRelativeActivity(community.id);
   const createdDateFormatted = community.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Est. 2026';
   const totalMemberCount = community.memberCount ?? 1;
 
-  const handleCardClick = () => {
-    onView(community);
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    onView(community, e.currentTarget);
   };
 
   const handleAction = async (e: React.MouseEvent) => {
@@ -175,7 +176,7 @@ function CommunityCard({
       return;
     }
     if (isJoined) {
-      onView(community);
+      onView(community, e.currentTarget as HTMLElement);
       return;
     }
     if (isPrivate) {
@@ -281,7 +282,7 @@ function CommunityCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onView(community);
+                  onView(community, e.currentTarget);
                 }}
                 aria-label={`View ${community.name} details`}
                 className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400 flex items-center gap-1"
@@ -365,7 +366,7 @@ function CommunityCard({
           </div>
 
           <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-            {community.longDescription || community.description || 'Welcome to this vibrant community space on Nexus. Join conversations, share projects, and collaborate.'}
+            {descriptions.description || descriptions.longDescription}
           </p>
         </div>
 
@@ -493,9 +494,11 @@ export default function DiscoverPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recommended' | 'active' | 'newest' | 'largest'>('recommended');
+  const [isSorting, setIsSorting] = useState(false);
   const [mutedIds, setMutedIds] = useState<string[]>([]);
   const [reportTarget, setReportTarget] = useState<any | null>(null);
   const [selectedDetailsCommunity, setSelectedDetailsCommunity] = useState<any | null>(null);
+  const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
@@ -512,20 +515,23 @@ export default function DiscoverPage() {
     }
   }, []);
 
-  const handleOpenDetails = (c: any) => {
+  const handleOpenDetails = (c: any, el?: HTMLElement) => {
+    if (el) setTriggerElement(el);
+    else setTriggerElement(document.activeElement as HTMLElement | null);
     setSelectedDetailsCommunity(c);
     setIsDetailsModalOpen(true);
-    toast.success(`Opening details for ${c.name}...`, { id: 'view-community-toast', duration: 1800 });
     setLiveAnnouncement(`Viewing details for ${c.name}`);
   };
 
   const handleSortChange = (newSort: 'recommended' | 'active' | 'newest' | 'largest', label: string) => {
+    setIsSorting(true);
     setSortBy(newSort);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nexus_discover_sort', newSort);
     }
     toast.success(`Sorted by: ${label}`, { id: 'sort-toast', icon: '🔄' });
     setLiveAnnouncement(`Sorted communities by ${label}`);
+    setTimeout(() => setIsSorting(false), 120);
   };
 
   const handleHideCommunity = (c: any) => {
@@ -576,22 +582,25 @@ export default function DiscoverPage() {
     return matchSearch && matchCat;
   });
 
-  // Sorting
+  // Sorting - Verified distinct ordering for each option
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'largest') {
       return (b.memberCount || 1) - (a.memberCount || 1);
     }
     if (sortBy === 'active') {
-      return (b.memberCount || 1) - (a.memberCount || 1);
+      // Activity score: weighted by online presence and message volume
+      const aActivity = (a.onlineCount || 0) * 15 + (a.memberCount || 1);
+      const bActivity = (b.onlineCount || 0) * 15 + (b.memberCount || 1);
+      return bActivity - aActivity;
     }
     if (sortBy === 'newest') {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     }
-    // Recommended
-    const aScore = (a.isOfficial ? 1000 : 0) + (a.memberCount || 1);
-    const bScore = (b.isOfficial ? 1000 : 0) + (b.memberCount || 1);
+    // Recommended: Official status + boost tier + engagement
+    const aScore = (a.isVerified || a.isOfficial ? 20000 : 0) + ((a.boostLevel || 0) * 5000) + (a.memberCount || 1);
+    const bScore = (b.isVerified || b.isOfficial ? 20000 : 0) + ((b.boostLevel || 0) * 5000) + (b.memberCount || 1);
     return bScore - aScore;
   });
 
@@ -758,8 +767,13 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* No Results State */}
-        {sorted.length === 0 ? (
+        {/* Sorting transition or Cards Grid */}
+        {isSorting ? (
+          <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+            <p className="text-xs font-medium">Reordering communities...</p>
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="text-center py-16 px-4 rounded-3xl border border-white/[0.06] bg-white/[0.02] space-y-3">
             <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
               <Search size={22} />
@@ -829,6 +843,7 @@ export default function DiscoverPage() {
           community={selectedDetailsCommunity}
           onClose={() => setIsDetailsModalOpen(false)}
           onHideCommunity={handleHideCommunity}
+          triggerElement={triggerElement}
         />
       )}
 

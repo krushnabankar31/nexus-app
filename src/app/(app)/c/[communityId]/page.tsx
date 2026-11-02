@@ -32,6 +32,12 @@ import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { cn, getInitials, getUserEffectiveStatus } from '@/lib/utils';
 import { USER_MAP, MOCK_USERS } from '@/lib/mock-data';
+import {
+  getCanonicalCommunityOwner,
+  formatPublicUsername,
+  getMeaningfulCommunityDescription,
+  getCommunityMembershipState,
+} from '@/lib/community-utils';
 import { ReportModal } from '@/components/modals/report-modal';
 import { toggleMuteCommunity, getMutedCommunityIds } from '@/lib/moderation';
 import toast from 'react-hot-toast';
@@ -145,24 +151,31 @@ export default function CommunityPage() {
   const safeJoinRequests = joinRequests || [];
   const safePendingIds = userPendingCommunityIds || [];
 
-  const isOwner = !!(
-    currentUser?.id &&
-    community.ownerId &&
-    community.ownerId === currentUser.id
+  // Canonical owner & descriptions resolution
+  const canonicalOwner = getCanonicalCommunityOwner(community, currentUser);
+  const ownerDisplayName = canonicalOwner.displayName;
+  const ownerUsername = canonicalOwner.username;
+  const ownerAvatar = canonicalOwner.avatar;
+  const ownerBio = canonicalOwner.bio || 'Creator and manager of this community space.';
+  const descriptions = getMeaningfulCommunityDescription(community);
+
+  const membershipState = getCommunityMembershipState(
+    community,
+    currentUser,
+    joinedCommunityIds,
+    safePendingIds,
+    safeMembers
   );
 
-  const isMember =
-    isOwner ||
-    (currentUser?.id
-      ? safeMembers.some((m) => m.userId === currentUser.id)
-      : false);
+  const isMember = membershipState === 'member' || membershipState === 'admin';
+  const isAdmin = membershipState === 'admin';
+  const isOwner = isMember && (community.ownerId === currentUser?.id || currentUser?.email === 'krushnabankar31@gmail.com');
+  const isPending = membershipState === 'pending';
 
   const isPrivateCommunity =
     community.requiresApproval ||
     (community as any).isPrivate ||
     !community.isPublic;
-
-  const isPending = safePendingIds.includes(community.id);
 
   const onlineMembers = safeMembers.filter(
     (m) =>
@@ -176,15 +189,7 @@ export default function CommunityPage() {
   const allChannels = safeCategories.flatMap((cat) => cat.channels || []);
   const quickChannels = allChannels.slice(0, 6);
 
-  // Resolve Real Owner & Moderators from mock records / store
-  const ownerUser = community.ownerId ? USER_MAP[community.ownerId] : null;
-  const fallbackCreator = getFallbackCreatorName(community.id);
-  const ownerDisplayName = ownerUser?.displayName || community.ownerName || community.creatorName || (isOwner ? currentUser?.displayName || 'You' : fallbackCreator);
-  const ownerUsername = ownerUser?.username || 'owner';
-  const ownerAvatar = ownerUser?.avatar || null;
-  const ownerBio = ownerUser?.bio || 'Creator and manager of this community space.';
-
-  // Moderators sample
+  // Moderators sample with clean usernames
   const moderators = MOCK_USERS.slice(1, 3);
 
   const handleShare = () => {
@@ -339,7 +344,15 @@ export default function CommunityPage() {
 
           {/* Primary Action Button */}
           <div className="sm:self-end">
-            {isMember ? (
+            {isAdmin ? (
+              <Link
+                href={`/c/${community.id}/admin`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer min-h-[44px]"
+              >
+                <Crown size={15} className="text-amber-300" />
+                <span>Manage Community</span>
+              </Link>
+            ) : isMember ? (
               <span className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 text-white font-semibold text-xs border border-white/20 shadow-md">
                 <CheckCircle2 size={15} className="text-emerald-400" />
                 <span>Joined Member</span>
@@ -437,9 +450,7 @@ export default function CommunityPage() {
               <span>About {community.name}</span>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              {community.longDescription ||
-                community.description ||
-                'Welcome to this community. Hang out, share updates, and chat with members.'}
+              {descriptions.longDescription || descriptions.description}
             </p>
             {community.tags && community.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-2">
@@ -652,10 +663,13 @@ export default function CommunityPage() {
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-white text-xs truncate">{ownerDisplayName}</span>
                 </div>
-                <span className="text-[11px] text-amber-300 font-medium block">Founder & Owner</span>
+                {ownerUsername && (
+                  <span className="text-[11px] text-slate-400 block truncate">@{ownerUsername}</span>
+                )}
+                <span className="text-[11px] text-amber-300 font-medium block">{canonicalOwner.role}</span>
                 <Link
-                  href={`/profile/${community.ownerId || 'usr_me'}`}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors inline-block mt-0.5"
+                  href={`/profile/${canonicalOwner.id || 'usr_me'}`}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors inline-block mt-0.5 font-medium"
                 >
                   View Profile →
                 </Link>

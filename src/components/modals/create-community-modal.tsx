@@ -7,6 +7,7 @@ import { useUiStore } from '@/stores/ui-store';
 import { useCommunityStore } from '@/stores/community-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { isCommunityNameAllowed } from '@/lib/moderation';
+import { formatPublicUsername, getMeaningfulCommunityDescription } from '@/lib/community-utils';
 import toast from 'react-hot-toast';
 import type { Community } from '@nexus/types';
 
@@ -57,15 +58,16 @@ export function CreateCommunityModal() {
     setIsSubmitting(true);
 
     const newId = `com_${name.toLowerCase().replace(/[^a-z0-9]/g, '') || Date.now()}`;
+    const meaningful = getMeaningfulCommunityDescription({ category, name: name.trim(), description: description.trim() });
     const newCommunity: Community = {
       id: newId,
       name: name.trim(),
-      description: description.trim() || 'A new vibrant community created on Nexus.',
+      description: description.trim() || meaningful.description,
       icon: selectedEmoji,
       banner: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
       accentColor: '#6366f1',
       category: category as any,
-      tags: [category, 'new'],
+      tags: [category, 'nexus', 'collaboration'],
       memberCount: 1,
       onlineCount: 1,
       isVerified: false,
@@ -76,10 +78,13 @@ export function CreateCommunityModal() {
       hasNSFW: false,
       inviteCode: `nexus-${Math.random().toString(36).substring(2, 7)}`,
       ownerId: user?.id || 'usr-current',
+      ownerName: user?.displayName || user?.username || 'Community Founder',
+      ownerUsername: formatPublicUsername(user?.username) || 'founder',
+      ownerAvatar: user?.avatar || null,
       createdAt: new Date().toISOString(),
       boostLevel: 0,
       slug: newId,
-      longDescription: description.trim() || 'A new space for friends and team.',
+      longDescription: description.trim() || meaningful.longDescription,
       messageCount: 0,
     } as any;
 

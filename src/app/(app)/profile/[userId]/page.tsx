@@ -20,6 +20,7 @@ import { useConnectionStore } from '@/stores/connection-store';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { cn, getInitials, formatDate, getUserEffectiveStatus } from '@/lib/utils';
+import { formatPublicUsername } from '@/lib/community-utils';
 import type { User } from '@nexus/types';
 
 const STATUS_CONFIG = {
@@ -441,6 +442,7 @@ export default function UserProfilePage() {
   const user = isOwn ? (currentUser || profileUser) : profileUser;
   const displayName = user?.displayName || user?.username || 'User';
   const username = user?.username || 'user';
+  const cleanUsername = formatPublicUsername(user?.username);
   const avatar = user?.avatar;
   const status = getUserEffectiveStatus(user, currentUser?.id);
   const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.offline;
@@ -596,7 +598,9 @@ export default function UserProfilePage() {
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white truncate">
                   {displayName}
                 </h1>
-                <span className="text-xs sm:text-sm text-slate-400 font-medium">@{username}</span>
+                {cleanUsername && (
+                  <span className="text-xs sm:text-sm text-slate-400 font-medium">@{cleanUsername}</span>
+                )}
               </div>
 
               {/* Custom Status / Activity Banner */}
@@ -1103,7 +1107,7 @@ export default function UserProfilePage() {
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-white/5">
                       <span className="text-slate-400">Username</span>
-                      <span className="text-slate-200 font-mono">@{username}</span>
+                      <span className="text-slate-200 font-mono">{cleanUsername ? `@${cleanUsername}` : 'Private / Not set'}</span>
                     </div>
                     {currentUser?.email && (
                       <div className="flex justify-between items-center py-1.5 border-b border-white/5">
@@ -1136,7 +1140,7 @@ export default function UserProfilePage() {
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-white/5">
                       <span className="text-slate-400">Username</span>
-                      <span className="text-slate-200 font-mono">@{username}</span>
+                      <span className="text-slate-200 font-mono">{cleanUsername ? `@${cleanUsername}` : 'Private / Not set'}</span>
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-white/5">
                       <span className="text-slate-400">Connection Status</span>

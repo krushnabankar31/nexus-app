@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { USER_MAP, CURRENT_USER } from '@/lib/mock-data';
+import { isInternalIdentifier, formatPublicUsername } from '@/lib/community-utils';
 import type { User } from '@nexus/types';
 
 export const dynamic = 'force-dynamic';
@@ -91,6 +92,10 @@ export async function GET(
   delete (sanitizedPublicProfile as any).privateSettings;
   delete (sanitizedPublicProfile as any).permissions;
   delete (sanitizedPublicProfile as any).adminRoles;
+
+  // Enforce zero internal identifier leakage in public API responses
+  const publicUsername = formatPublicUsername(sanitizedPublicProfile.username);
+  sanitizedPublicProfile.username = publicUsername || '';
 
   return NextResponse.json(sanitizedPublicProfile, {
     headers: {

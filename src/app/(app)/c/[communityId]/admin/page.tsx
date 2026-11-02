@@ -10,7 +10,7 @@ import {
   X, ToggleLeft, ToggleRight, Plus, Search, Filter,
   Download, Trash2, Crown, ShieldCheck, UserX, Ban,
   Activity, Clock, Globe, Lock, Bell, Palette, Webhook,
-  FileText, ChevronDown,
+  FileText, ChevronDown, ShieldAlert,
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { MOCK_ANALYTICS, CURRENT_USER } from '@/lib/mock-data';
 import { useCommunityStore, canDeleteCommunity } from '@/stores/community-store';
+import { getCommunityMembershipState } from '@/lib/community-utils';
 import { useUiStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { getInitials, getUserEffectiveStatus } from '@/lib/utils';
@@ -614,7 +615,9 @@ export default function CommunityAdminPage() {
   const router = useRouter();
   const [section, setSection] = useState<AdminSection>('overview');
 
-  const { communities } = useCommunityStore();
+  const { communities, joinedCommunityIds, members } = useCommunityStore();
+  const { user: currentUser } = useAuthStore();
+
   const community =
     communities.find((c) => c.id === communityId) ??
     communities[0] ?? {
@@ -628,6 +631,45 @@ export default function CommunityAdminPage() {
       category: 'General',
       isVerified: false,
     };
+
+  const membershipState = getCommunityMembershipState(
+    community,
+    currentUser,
+    joinedCommunityIds,
+    [],
+    members
+  );
+  const isAuthorized = membershipState === 'admin';
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 text-center select-none">
+        <div className="max-w-md w-full p-8 rounded-3xl bg-[#0b0c16] border border-white/10 shadow-2xl space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <ShieldAlert size={28} />
+          </div>
+          <h2 className="text-xl font-bold text-white">Restricted Space: Admin Access Required</h2>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            You do not have administrative or moderation permissions for &ldquo;{community?.name || 'this space'}&rdquo;. Management controls are reserved for verified space owners and moderators.
+          </p>
+          <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+            <button
+              onClick={() => router.push(`/c/${communityId}`)}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/15 transition-colors cursor-pointer min-h-[44px]"
+            >
+              Back to Community
+            </button>
+            <button
+              onClick={() => router.push('/discover')}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 text-white text-xs font-semibold shadow-md transition-all cursor-pointer min-h-[44px]"
+            >
+              Explore Discovery
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderSection = () => {
     switch (section) {
