@@ -5,11 +5,14 @@ import Link from 'next/link';
 import { 
   Menu, X, ChevronRight, Play, CheckCircle2, MessageSquare, 
   Zap, BarChart, DollarSign, Users, Shield, Sparkles, 
-  ChevronDown, Star, ArrowRight, Github, Twitter, Linkedin, Globe, Flame
+  ChevronDown, Star, ArrowRight, Github, Twitter, Linkedin, Globe, Flame,
+  Clock, Video, Lock, Radio
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommunityStore } from '@/stores/community-store';
+import { Badge } from '@/components/ui/badge';
+import { siteConfig } from '@/lib/siteConfig';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -31,7 +34,7 @@ const Navbar = () => {
       }`}
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link href="/" className="flex items-center gap-2 group focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-lg">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xl group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(99,102,241,0.5)]">
             N
           </div>
@@ -39,9 +42,13 @@ const Navbar = () => {
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex flex-1 justify-center gap-8 text-sm font-medium text-neutral-300">
-          {['Features', 'Communities', 'Pricing', 'Changelog'].map((item) => (
-            <Link key={item} href={`#${item.toLowerCase()}`} className="hover:text-white transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[2px] after:bg-indigo-500 hover:after:w-full after:transition-all after:duration-300">
+        <nav className="hidden md:flex flex-1 justify-center gap-8 text-sm font-medium text-neutral-300" aria-label="Main Navigation">
+          {['Features', 'Roadmap', 'Communities', 'Pricing', 'Changelog'].map((item) => (
+            <Link 
+              key={item} 
+              href={`#${item.toLowerCase()}`} 
+              className="hover:text-white transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[2px] after:bg-indigo-500 hover:after:w-full after:transition-all after:duration-300 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md px-1"
+            >
               {item}
             </Link>
           ))}
@@ -51,10 +58,10 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-3">
             <Link
               href="/discover"
-              className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-500/25 active:scale-95"
+              className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-500/25 active:scale-95 focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
             >
               {user.avatar ? (
-                <img src={user.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                <img src={user.avatar} alt={user.displayName || user.username || 'User avatar'} className="w-6 h-6 rounded-full object-cover" />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white">
                   {(user.displayName || user.username || 'U').charAt(0).toUpperCase()}
@@ -65,10 +72,16 @@ const Navbar = () => {
           </div>
         ) : (
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/login" className="text-sm font-medium text-neutral-300 hover:text-white transition-colors">
+            <Link 
+              href="/login" 
+              className="text-sm font-medium text-neutral-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md px-2 py-1"
+            >
               Log in
             </Link>
-            <Link href="/signup" className="text-sm font-medium bg-white text-black px-4 py-2 rounded-full hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <Link 
+              href="/signup" 
+              className="text-sm font-medium bg-white text-black px-4 py-2 rounded-full hover:bg-neutral-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
+            >
               Get Started
             </Link>
           </div>
@@ -76,8 +89,9 @@ const Navbar = () => {
 
         {/* Mobile Toggle */}
         <button 
-          className="md:hidden text-neutral-300 hover:text-white"
+          className="md:hidden text-neutral-300 hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md p-1"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
         >
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -86,7 +100,7 @@ const Navbar = () => {
       {/* Mobile Menu */}
       <div className={`md:hidden absolute top-full left-0 w-full bg-neutral-900 border-b border-white/10 overflow-hidden transition-all duration-300 ease-in-out ${mobileMenuOpen ? 'max-h-96 py-4' : 'max-h-0 py-0 border-transparent'}`}>
         <div className="flex flex-col px-6 gap-4">
-          {['Features', 'Communities', 'Pricing', 'Changelog'].map((item) => (
+          {['Features', 'Roadmap', 'Communities', 'Pricing', 'Changelog'].map((item) => (
             <Link key={item} href={`#${item.toLowerCase()}`} className="text-lg font-medium text-neutral-300 hover:text-white" onClick={() => setMobileMenuOpen(false)}>
               {item}
             </Link>
@@ -137,7 +151,7 @@ const Hero = ({
         
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-indigo-300 mb-8 backdrop-blur-md">
           <Sparkles size={14} className="text-indigo-400" />
-          <span>Now with AI Copilot — Try it free</span>
+          <span>Real-Time Communities, Voice & Chat</span>
           <ChevronRight size={14} />
         </div>
 
@@ -149,24 +163,24 @@ const Hero = ({
         </h1>
 
         <p className="text-lg md:text-xl text-neutral-400 max-w-2xl mb-10 leading-relaxed">
-          Nexus is the all-in-one platform for creators, startups, and brands to build engaging, monetizable, and hyper-active communities.
+          Nexus is the modern real-time platform for teams, communities, and builders to chat, connect, and collaborate with zero latency.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-16 w-full sm:w-auto">
           {isAuthenticated && user ? (
             <Link
               href="/discover"
-              className="px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg hover:from-indigo-500 hover:to-violet-500 transition-all flex items-center justify-center gap-2.5 hover:scale-105 active:scale-95 shadow-[0_0_35px_rgba(99,102,241,0.5)]"
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg hover:from-indigo-500 hover:to-violet-500 transition-all flex items-center justify-center gap-2.5 hover:scale-105 active:scale-95 shadow-[0_0_35px_rgba(99,102,241,0.5)] focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
             >
               <span>Open Nexus ({user.displayName || user.username})</span>
               <ArrowRight size={20} />
             </Link>
           ) : (
-            <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+            <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none">
               Start for free <ArrowRight size={20} />
             </Link>
           )}
-          <Link href="/discover" className="px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
+          <Link href="/discover" className="px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-all flex items-center justify-center gap-2 backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none">
             Explore communities <Play size={20} className="fill-current" />
           </Link>
         </div>
@@ -174,26 +188,26 @@ const Hero = ({
         <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-neutral-400 mb-20 font-medium text-sm md:text-base uppercase tracking-wider">
           <div className="flex flex-col items-center gap-1">
             <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">
-              {communityCount}
+              {communityCount > 0 ? communityCount : 'Active'}
             </span>
             Real Communities
           </div>
           <div className="w-px h-12 bg-white/10 hidden md:block"></div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">
-              {memberCount}
+              {memberCount > 0 ? memberCount : 'Live'}
             </span>
             Active Members
           </div>
           <div className="w-px h-12 bg-white/10 hidden md:block"></div>
           <div className="flex flex-col items-center gap-1">
-            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">100%</span>
+            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">&lt; 50ms</span>
             Real-Time Sync
           </div>
           <div className="w-px h-12 bg-white/10 hidden md:block"></div>
           <div className="flex flex-col items-center gap-1">
-            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">99.9%</span>
-            Cloud Uptime
+            <span className="text-2xl md:text-3xl text-white font-bold tracking-normal normal-case">WebRTC</span>
+            P2P Voice & Video
           </div>
         </div>
 
@@ -227,7 +241,7 @@ const Hero = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 px-2 py-1.5 bg-white/10 rounded text-sm text-white"><span className="text-neutral-400">#</span> announcements</div>
                     <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> general</div>
-                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> chit-chat</div>
+                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded text-sm text-neutral-400"><span className="text-neutral-500">#</span> resources</div>
                   </div>
                 </div>
               </div>
@@ -298,20 +312,47 @@ const SocialProof = () => (
 
 const Features = () => {
   const features = [
-    { icon: MessageSquare, title: 'Real-time Messaging', desc: 'Lightning-fast chat with threads, reactions, and rich media support.' },
-    { icon: Sparkles, title: 'AI Copilot', desc: 'Auto-summarize long threads and generate responses instantly.' },
-    { icon: BarChart, title: 'Analytics Dashboard', desc: 'Understand your community growth and engagement with deep insights.' },
-    { icon: DollarSign, title: 'Creator Monetization', desc: 'Offer paid subscriptions and one-time purchases seamlessly.' },
-    { icon: Users, title: 'Collaborative Workspace', desc: 'Built-in docs, whiteboards, and task management for teams.' },
-    { icon: Shield, title: 'Enterprise Security', desc: 'AES-256 and TLS 1.3 encryption, role-based access, and automated moderation tools.' },
+    { 
+      icon: MessageSquare, 
+      title: 'Real-Time Messaging', 
+      desc: 'Lightning-fast channel chat with rich formatting, emoji reactions, and instant Firestore synchronization.' 
+    },
+    { 
+      icon: Video, 
+      title: 'WebRTC Voice & Video', 
+      desc: 'Peer-to-peer audio and video spaces for direct and group conversations with microphone and screen controls.' 
+    },
+    { 
+      icon: Shield, 
+      title: 'Granular Roles & Moderation', 
+      desc: 'Define Owner, Admin, and Moderator permissions to keep your spaces secure, welcoming, and organized.' 
+    },
+    { 
+      icon: Lock, 
+      title: '1-on-1 Direct Messaging', 
+      desc: 'Private direct messages with active connection discovery, unread indicators, and instant notification alerts.' 
+    },
+    { 
+      icon: Radio, 
+      title: 'Live Member Presence', 
+      desc: 'Automated heartbeat presence tracking showing who is online, idle, or offline across all shared spaces.' 
+    },
+    { 
+      icon: Zap, 
+      title: 'Modern Cloud Architecture', 
+      desc: 'Built on Next.js 14 App Router, Tailwind CSS, and Firebase Firestore for low latency and high availability.' 
+    },
   ];
 
   return (
     <section id="features" className="py-24 relative z-10">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">6 reasons communities choose Nexus</h2>
-          <p className="text-neutral-400 max-w-2xl mx-auto">Everything you need to scale from your first 10 members to a global movement.</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-400 mb-4">
+            <span>Built & Available Today</span>
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">Everything you need to run your community</h2>
+          <p className="text-neutral-400 max-w-2xl mx-auto">High-performance real-time features already live and running on Nexus.</p>
         </div>
         
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -330,6 +371,72 @@ const Features = () => {
   );
 };
 
+const Roadmap = () => {
+  const roadmapItems = [
+    { 
+      icon: DollarSign, 
+      title: 'Creator Monetization', 
+      desc: 'Paid community memberships, subscription tiers, and gated supporter channels with Stripe integration.' 
+    },
+    { 
+      icon: BarChart, 
+      title: 'Analytics Dashboard', 
+      desc: 'In-depth growth metrics, active conversation telemetry, and member retention curves.' 
+    },
+    { 
+      icon: Users, 
+      title: 'Collaborative Workspace', 
+      desc: 'Shared real-time whiteboards, kanban task boards, and collaborative community docs.' 
+    },
+    { 
+      icon: Sparkles, 
+      title: 'AI Conversation Copilot', 
+      desc: 'Automated thread summaries, proactive moderation assistant, and context-aware smart replies.' 
+    },
+    { 
+      icon: Globe, 
+      title: 'Custom Domain Mapping', 
+      desc: 'Host your community portal under your own custom domain name (e.g. community.yourdomain.com).' 
+    },
+  ];
+
+  return (
+    <section id="roadmap" className="py-20 relative z-10 bg-neutral-900/40 border-y border-white/5">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-400 mb-4">
+            <Clock size={13} />
+            <span>Under Active Development</span>
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">Upcoming Platform Roadmap</h2>
+          <p className="text-neutral-400 max-w-2xl mx-auto">
+            We believe in honest building. Here are the features currently in design and engineering:
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {roadmapItems.map((item, i) => (
+            <div key={i} className="p-6 rounded-2xl bg-neutral-950/80 border border-white/5 relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <item.icon className="text-amber-400" size={20} />
+                  </div>
+                  <Badge variant="warning" size="sm">
+                    Coming soon
+                  </Badge>
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const AiCopilot = () => (
   <section className="py-24 relative z-10 overflow-hidden">
     <div className="absolute top-1/2 left-0 w-1/3 h-1/2 bg-violet-600/20 blur-[120px] rounded-full mix-blend-screen pointer-events-none"></div>
@@ -338,21 +445,22 @@ const AiCopilot = () => (
       <div>
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-sm text-violet-400 mb-6">
           <Sparkles size={14} /> Nexus AI
+          <Badge variant="warning" size="sm" className="ml-2">Roadmap Preview</Badge>
         </div>
         <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white leading-tight">
           Your community manager that never sleeps.
         </h2>
         <p className="text-neutral-400 text-lg mb-8">
-          Harness the power of AI to keep conversations flowing, moderate content, and summarize days of chat into seconds of reading.
+          Planned AI capabilities designed to keep conversations flowing, assist moderators, and summarize long threads into quick briefings.
         </p>
         
         <ul className="space-y-4">
           {[
-            'Auto-summarize missed conversations',
-            'Smart replies and content generation',
-            'Automated toxic content moderation',
-            'Sentiment analysis and health metrics',
-            'Custom AI personas for your brand'
+            'Auto-summarize missed conversations (Planned)',
+            'Smart replies and conversation starters (Planned)',
+            'Automated toxic content moderation (Planned)',
+            'Community sentiment and health metrics (Planned)',
+            'Custom AI personas for your brand (Planned)'
           ].map((item, i) => (
             <li key={i} className="flex items-center gap-3 text-neutral-300">
               <CheckCircle2 className="text-violet-500" size={20} />
@@ -367,7 +475,7 @@ const AiCopilot = () => (
         <div className="relative rounded-2xl border border-white/10 bg-neutral-900 overflow-hidden shadow-2xl">
           <div className="h-12 border-b border-white/10 bg-neutral-950 flex items-center px-4 gap-3">
             <Sparkles size={16} className="text-violet-400" />
-            <span className="text-sm font-medium text-neutral-200">AI Copilot</span>
+            <span className="text-sm font-medium text-neutral-200">AI Copilot (Feature Preview)</span>
           </div>
           <div className="p-6 space-y-6">
             <div className="flex gap-4 justify-end">
@@ -380,7 +488,7 @@ const AiCopilot = () => (
                 <Sparkles size={14} className="text-white" />
               </div>
               <div className="bg-neutral-800 text-neutral-200 p-4 rounded-lg rounded-tl-none flex-1">
-                <p className="text-sm mb-3 text-neutral-300">Here's a summary of the 142 messages in #general since you were last online:</p>
+                <p className="text-sm mb-3 text-neutral-300">Here's a preview summary of the 142 messages in #general since you were last online:</p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex gap-2"><span className="text-violet-400">•</span> <strong>@david</strong> shared the new Figma prototypes for v2.</li>
                   <li className="flex gap-2"><span className="text-violet-400">•</span> The team discussed moving the all-hands to Thursdays.</li>
@@ -398,10 +506,10 @@ const AiCopilot = () => (
 
 const UseCases = () => {
   const cases = [
-    { emoji: '🎮', title: 'Gaming', desc: 'Guilds, clans, and studios.', benefits: ['Voice channels', 'Integrations', 'Tournaments', 'Roles'] },
-    { emoji: '🎓', title: 'Education', desc: 'Bootcamps and courses.', benefits: ['Resource library', 'Q&A threads', 'Study groups', 'Progress tracking'] },
-    { emoji: '🎨', title: 'Creators', desc: 'YouTubers and artists.', benefits: ['Paywalls', 'Exclusive content', 'Direct support', 'Events'] },
-    { emoji: '🚀', title: 'Startups', desc: 'Product teams and users.', benefits: ['Customer feedback', 'Changelogs', 'Beta testing', 'Support'] },
+    { emoji: '🎮', title: 'Gaming', desc: 'Guilds, clans, and studios.', benefits: ['Voice channels', 'Integrations', 'Role management', 'Private spaces'] },
+    { emoji: '🎓', title: 'Education', desc: 'Bootcamps and courses.', benefits: ['Resource channels', 'Direct Q&A', 'Study groups', 'Announcements'] },
+    { emoji: '🎨', title: 'Creators', desc: 'YouTubers and artists.', benefits: ['Community hub', 'Exclusive updates', 'Direct support', 'Live chat'] },
+    { emoji: '🚀', title: 'Startups', desc: 'Product teams and users.', benefits: ['Customer feedback', 'Changelogs', 'Beta groups', 'Support chat'] },
   ];
 
   return (
@@ -500,6 +608,78 @@ const Highlights = () => {
   );
 };
 
+const Changelog = () => {
+  const milestones = [
+    {
+      version: 'v0.4.0',
+      date: 'Latest Release',
+      title: 'WebRTC P2P Voice & Video Spaces',
+      desc: 'Added low-latency peer-to-peer audio/video rooms with live waveform visualizer, screen sharing, and participant controls.',
+      tags: ['Voice', 'Video', 'WebRTC'],
+    },
+    {
+      version: 'v0.3.0',
+      date: 'Recent',
+      title: 'Direct Messaging & Connection Flows',
+      desc: 'Introduced 1-on-1 private messaging, friend discovery, connection requests, and privacy-preserving member handles.',
+      tags: ['DMs', 'Connections', 'Privacy'],
+    },
+    {
+      version: 'v0.2.0',
+      date: 'Milestone',
+      title: 'Role-Based Access Control & Community Management',
+      desc: 'Implemented Owner, Admin, and Moderator permission enforcement, member directories, and community discovery modals.',
+      tags: ['Permissions', 'Admin', 'Safety'],
+    },
+    {
+      version: 'v0.1.0',
+      date: 'Foundation',
+      title: 'Real-Time Sync & Multi-Channel Chat',
+      desc: 'Initial release with Next.js 14 App Router, Firebase Firestore real-time listeners, and presence tracking heartbeat.',
+      tags: ['Core', 'Firestore', 'Sync'],
+    },
+  ];
+
+  return (
+    <section id="changelog" className="py-24 relative z-10 bg-neutral-900/30 border-t border-white/5">
+      <div className="max-w-4xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-neutral-300 mb-4">
+            <span>Project Milestones</span>
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">Changelog & Updates</h2>
+          <p className="text-neutral-400 max-w-xl mx-auto">
+            Transparent progress of features designed, built, and shipped into Nexus.
+          </p>
+        </div>
+
+        <div className="space-y-6 relative before:absolute before:inset-0 before:left-8 md:before:left-32 before:w-0.5 before:bg-white/10">
+          {milestones.map((item, i) => (
+            <div key={i} className="relative flex flex-col md:flex-row gap-6 items-start">
+              <div className="md:w-28 flex-shrink-0 text-left md:text-right pt-1">
+                <span className="font-mono text-sm font-bold text-indigo-400">{item.version}</span>
+                <p className="text-xs text-neutral-500">{item.date}</p>
+              </div>
+              <div className="w-4 h-4 rounded-full bg-indigo-600 border-4 border-neutral-950 absolute left-6 md:left-[122px] top-2 z-10"></div>
+              <div className="flex-1 ml-10 md:ml-4 p-6 rounded-2xl bg-neutral-900/90 border border-white/5">
+                <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-neutral-400 leading-relaxed mb-4">{item.desc}</p>
+                <div className="flex flex-wrap gap-2">
+                  {item.tags.map((tag) => (
+                    <span key={tag} className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-white/5 text-neutral-400 border border-white/5">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const Pricing = () => {
   const [annual, setAnnual] = useState(true);
 
@@ -513,7 +693,8 @@ const Pricing = () => {
             <span className={annual ? 'text-neutral-400' : 'text-white font-medium'}>Monthly</span>
             <button 
               onClick={() => setAnnual(!annual)}
-              className="w-12 h-6 rounded-full bg-white/10 relative transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-12 h-6 rounded-full bg-white/10 relative transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              aria-label="Toggle annual or monthly pricing"
             >
               <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all duration-300 ${annual ? 'left-7' : 'left-1'}`}></div>
             </button>
@@ -533,13 +714,21 @@ const Pricing = () => {
               <span className="text-neutral-500">/mo</span>
             </div>
             <ul className="space-y-4 mb-8 flex-1">
-              {['Up to 500 members', 'Unlimited messages', 'Basic analytics', 'Standard support'].map((f, i) => (
+              {[
+                'Up to 500 members', 
+                'Unlimited channel messages', 
+                '1-on-1 direct messaging', 
+                'Standard moderation tools'
+              ].map((f, i) => (
                 <li key={i} className="flex items-center gap-3 text-neutral-300 text-sm">
                   <CheckCircle2 size={16} className="text-neutral-500" /> {f}
                 </li>
               ))}
             </ul>
-            <Link href="/signup?plan=free" className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm">
+            <Link 
+              href="/signup?plan=free" 
+              className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
+            >
               Get Started
             </Link>
             <p className="text-[11px] text-neutral-400 text-center mt-2.5">
@@ -555,46 +744,75 @@ const Pricing = () => {
             <h3 className="text-xl font-semibold text-white mb-2">Pro</h3>
             <p className="text-neutral-400 text-sm mb-6">For growing communities and creators.</p>
             <div className="mb-8">
-              <span className="text-4xl font-bold text-white">${annual ? '9.99' : '12.99'}</span>
+              <span className="text-4xl font-bold text-white">${annual ? '8' : '10'}</span>
               <span className="text-neutral-500">/mo</span>
             </div>
             <ul className="space-y-4 mb-8 flex-1">
-              {['Unlimited members', 'AI Copilot features', 'Advanced analytics', 'Custom domain', 'Priority support'].map((f, i) => (
-                <li key={i} className="flex items-center gap-3 text-neutral-200 text-sm">
-                  <CheckCircle2 size={16} className="text-indigo-400" /> {f}
+              {[
+                { text: 'Unlimited members & spaces', live: true },
+                { text: 'WebRTC voice & video rooms', live: true },
+                { text: 'Granular role hierarchies', live: true },
+                { text: 'AI Copilot features', live: false },
+                { text: 'Custom domain connection', live: false },
+              ].map((f, i) => (
+                <li key={i} className="flex items-center justify-between text-neutral-200 text-sm">
+                  <span className="flex items-center gap-3">
+                    <CheckCircle2 size={16} className="text-indigo-400" /> {f.text}
+                  </span>
+                  {!f.live && (
+                    <Badge variant="warning" size="sm">
+                      Coming soon
+                    </Badge>
+                  )}
                 </li>
               ))}
             </ul>
-            <Link href="/signup?plan=pro" className="block w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white font-medium hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-shadow text-center text-sm shadow-md">
+            <Link 
+              href="/signup?plan=pro" 
+              className="block w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-500 text-white font-medium hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] transition-shadow text-center text-sm shadow-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none"
+            >
               Start Free Trial
             </Link>
             <p className="text-[11px] text-indigo-300/80 text-center mt-2.5 font-medium">
-              14-day free trial · Billed {annual ? 'annually' : 'monthly'} · Cancel anytime
+              14-day free trial · {annual ? 'Billed annually ($96/yr) · Save 20%' : 'Billed monthly · Cancel anytime'}
             </p>
           </div>
 
           {/* Enterprise Tier */}
           <div className="p-8 rounded-3xl bg-neutral-900 border border-white/5 flex flex-col">
             <h3 className="text-xl font-semibold text-white mb-2">Enterprise</h3>
-            <p className="text-neutral-400 text-sm mb-6">For large organizations requiring scale.</p>
+            <p className="text-neutral-400 text-sm mb-6">For organizations requiring scale.</p>
             <div className="mb-8">
               <span className="text-4xl font-bold text-white">Custom</span>
             </div>
             <ul className="space-y-4 mb-8 flex-1">
-              {['SLA 99.99% uptime', 'SSO & Advanced Security', 'Dedicated success manager', 'Custom AI models', 'API access'].map((f, i) => (
+              {[
+                'High-availability infrastructure', 
+                'Custom role hierarchies & rules', 
+                'Audit & moderation logging', 
+                'Priority support channel', 
+                'Roadmap input & early access'
+              ].map((f, i) => (
                 <li key={i} className="flex items-center gap-3 text-neutral-300 text-sm">
                   <CheckCircle2 size={16} className="text-neutral-500" /> {f}
                 </li>
               ))}
             </ul>
-            <a href="mailto:sales@nexus.app?subject=Nexus%20Enterprise%20Inquiry" className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm">
+            <a 
+              href={`mailto:${siteConfig.contact.salesEmail}?subject=Nexus%20Enterprise%20Inquiry`} 
+              className="block w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors text-center text-sm shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
+            >
               Contact Sales
             </a>
             <p className="text-[11px] text-neutral-400 text-center mt-2.5">
-              Custom onboarding & SLA · Talk to engineering
+              Custom onboarding · Direct access to engineering
             </p>
           </div>
         </div>
+
+        <p className="text-center text-xs text-amber-400/80 mt-10 font-medium">
+          Note: Pricing is displayed for roadmap demonstration; billing is not yet live.
+        </p>
       </div>
     </section>
   );
@@ -602,12 +820,30 @@ const Pricing = () => {
 
 const Faq = () => {
   const faqs = [
-    { q: "How easy is it to migrate from Discord or Slack?", a: "Extremely easy. We have a 1-click import tool that brings over your channels, roles, members, and message history without any downtime." },
-    { q: "Is my community data used to train your AI?", a: "No. Your data is yours. We use strictly isolated, privacy-first models and never use your private community data to train public models." },
-    { q: "Can I use a custom domain?", a: "Yes, custom domains are available on the Pro and Enterprise tiers, allowing you to host your community at community.yourbrand.com." },
-    { q: "How does creator monetization work?", a: "You can set up subscriptions, one-time payments, or gated channels directly within Nexus. We take a flat 5% fee on transactions." },
-    { q: "Do you have mobile apps?", a: "Yes, Nexus is available natively on iOS and Android, offering full feature parity with our web and desktop apps." },
-    { q: "What happens if I exceed the Free tier limits?", a: "We'll notify you when you're approaching the 500 member limit. You can then upgrade to Pro, or your community will be temporarily capped from accepting new members." },
+    { 
+      q: "How easy is it to migrate from Discord or Slack?", 
+      a: "We currently provide channel templates and manual setup assistance to recreate your structure on Nexus. Automated 1-click import tools for messages and roles are currently on our active roadmap." 
+    },
+    { 
+      q: "Is my community data used to train AI models?", 
+      a: "No. Your data belongs entirely to you. We do not use your private community discussions or messages to train public AI models." 
+    },
+    { 
+      q: "Can I use a custom domain?", 
+      a: "Custom domain mapping (e.g. community.yourbrand.com) is currently in development under our Pro and Enterprise roadmap." 
+    },
+    { 
+      q: "How will creator monetization work?", 
+      a: "We are building integrated subscription tiers and gated channels powered by Stripe. You'll be able to accept recurring memberships directly within your community once monetization goes live." 
+    },
+    { 
+      q: "Do you have native mobile apps?", 
+      a: "Nexus is built as a responsive progressive web app that runs seamlessly on both iOS and Android mobile browsers. Native apps are planned on our roadmap as the platform expands." 
+    },
+    { 
+      q: "What are the Free tier limits?", 
+      a: "The Hobby tier supports up to 500 members with full access to text channels, real-time sync, and 1-on-1 direct messages without time limits." 
+    },
   ];
 
   return (
@@ -617,7 +853,7 @@ const Faq = () => {
         <div className="space-y-4">
           {faqs.map((faq, i) => (
             <details key={i} className="group border border-white/10 rounded-lg bg-neutral-900 overflow-hidden open:ring-1 open:ring-indigo-500/50 transition-all">
-              <summary className="p-5 font-medium cursor-pointer text-white flex justify-between items-center select-none">
+              <summary className="p-5 font-medium cursor-pointer text-white flex justify-between items-center select-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none">
                 {faq.q}
                 <ChevronDown size={18} className="text-neutral-500 group-open:rotate-180 transition-transform" />
               </summary>
@@ -639,16 +875,16 @@ const FinalCta = () => (
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-neutral-950 -z-10"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-transparent -z-10 blur-xl"></div>
         
-        <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">Ready to build your dream community?</h2>
+        <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">Ready to build your community space?</h2>
         <p className="text-xl text-indigo-200/80 max-w-2xl mx-auto mb-10">
-          Join thousands of creators and brands who have already made the switch to Nexus.
+          Join growing creators, teams, and builders connecting in real time on Nexus.
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-transform hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)] text-center">
+          <Link href="/signup" className="px-8 py-4 rounded-full bg-white text-black font-semibold text-lg hover:bg-neutral-200 transition-transform hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)] text-center focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none">
             Start for free
           </Link>
-          <Link href="/discover" className="px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-colors backdrop-blur-sm text-center">
+          <Link href="/discover" className="px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-colors backdrop-blur-sm text-center focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none">
             Explore communities
           </Link>
         </div>
@@ -662,19 +898,36 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-6">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 mb-12">
         <div className="col-span-2 lg:col-span-2">
-          <Link href="/" className="flex items-center gap-2 mb-6">
+          <Link href="/" className="flex items-center gap-2 mb-6 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md w-fit">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xl">
               N
             </div>
             <span className="text-xl font-bold text-white">Nexus</span>
           </Link>
           <p className="text-neutral-400 text-sm mb-6 max-w-sm">
-            The next generation platform for communities to connect, collaborate, and grow together.
+            The next generation platform for communities to connect, collaborate, and grow together in real time.
           </p>
           <div className="flex gap-4">
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Nexus Twitter" className="text-neutral-500 hover:text-white transition-colors"><Twitter size={20} /></a>
-            <a href="https://github.com/krushnabankar31/nexus-app" target="_blank" rel="noopener noreferrer" aria-label="Nexus GitHub Repository" className="text-neutral-500 hover:text-white transition-colors"><Github size={20} /></a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="Nexus LinkedIn" className="text-neutral-500 hover:text-white transition-colors"><Linkedin size={20} /></a>
+            <a 
+              href={siteConfig.links.github} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              aria-label="Nexus GitHub Repository" 
+              className="text-neutral-500 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md p-1"
+            >
+              <Github size={20} />
+            </a>
+            {siteConfig.links.twitter ? (
+              <a 
+                href={siteConfig.links.twitter} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                aria-label="Nexus Twitter" 
+                className="text-neutral-500 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-md p-1"
+              >
+                <Twitter size={20} />
+              </a>
+            ) : null}
           </div>
         </div>
         
@@ -683,12 +936,24 @@ const Footer = () => (
           <ul className="space-y-3">
             {[
               { label: 'Features', href: '#features' },
+              { label: 'Roadmap', href: '#roadmap' },
+              { label: 'Changelog', href: '#changelog' },
               { label: 'Discover', href: '/discover' },
               { label: 'Pricing', href: '#pricing' },
-              { label: 'Live Status', href: '/status' },
-              { label: 'Documentation', href: 'https://github.com/krushnabankar31/nexus-app#readme' },
+              { label: 'Live Status', href: siteConfig.links.status },
+              { label: 'GitHub / README', href: siteConfig.links.github, external: true },
             ].map(l => (
-              <li key={l.label}><Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link></li>
+              <li key={l.label}>
+                {l.external ? (
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">
+                    {l.label}
+                  </a>
+                ) : (
+                  <Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">
+                    {l.label}
+                  </Link>
+                )}
+              </li>
             ))}
           </ul>
         </div>
@@ -700,13 +965,13 @@ const Footer = () => (
               { label: 'About Nexus', href: '#features' },
               { label: 'Communities', href: '/discover' },
               { label: 'Security Center', href: '/security' },
-              { label: 'Contact Support', href: 'mailto:support@nexus.app' },
+              { label: 'Contact Support', href: `mailto:${siteConfig.contact.supportEmail}` },
             ].map(l => (
               <li key={l.label}>
                 {l.href.startsWith('mailto:') ? (
-                  <a href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</a>
+                  <a href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">{l.label}</a>
                 ) : (
-                  <Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link>
+                  <Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">{l.label}</Link>
                 )}
               </li>
             ))}
@@ -722,7 +987,7 @@ const Footer = () => (
               { label: 'Cookie Policy', href: '/privacy#cookies' },
               { label: 'System Status', href: '/status' },
             ].map(l => (
-              <li key={l.label}><Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors">{l.label}</Link></li>
+              <li key={l.label}><Link href={l.href} className="text-sm text-neutral-400 hover:text-indigo-400 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">{l.label}</Link></li>
             ))}
           </ul>
         </div>
@@ -730,11 +995,11 @@ const Footer = () => (
       
       <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="text-neutral-500 text-sm">
-          © {new Date().getFullYear()} Nexus Inc. All rights reserved.
+          © {new Date().getFullYear()} Nexus. All rights reserved.
         </p>
-        <Link href="/status" className="flex gap-2 items-center text-xs text-neutral-400 hover:text-white transition-colors">
+        <Link href="/status" className="flex gap-2 items-center text-xs text-neutral-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none rounded-sm">
           <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500"></span>
-          <span>All systems operational (99.96% Live Telemetry)</span>
+          <span>All core systems operational (Live Telemetry)</span>
         </Link>
       </div>
     </div>
@@ -762,8 +1027,8 @@ export default function LandingPage() {
     };
   }, [initCommunitiesListener, initMembersListener]);
 
-  const communityCount = communities.length > 0 ? communities.length : 2;
-  const memberCount = members.length > 0 ? members.length : 4;
+  const communityCount = communities.length;
+  const memberCount = members.length;
   const activeCommunity = communities[0] ?? null;
 
   return (
@@ -777,9 +1042,11 @@ export default function LandingPage() {
         />
         <SocialProof />
         <Features />
+        <Roadmap />
         <AiCopilot />
         <UseCases />
         <Highlights />
+        <Changelog />
         <Pricing />
         <Faq />
         <FinalCta />

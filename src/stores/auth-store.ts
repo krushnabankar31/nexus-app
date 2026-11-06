@@ -34,10 +34,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: CURRENT_USER,
-      isAuthenticated: true,
+      user: null,
+      isAuthenticated: false,
       isLoading: false,
-      token: 'nexus-jwt-token',
+      token: null,
       error: null,
 
       initAuthListener: () => {

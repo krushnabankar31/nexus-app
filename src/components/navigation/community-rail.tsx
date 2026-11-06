@@ -369,17 +369,25 @@ export function CommunityRail() {
 
       {/* Joined Communities List */}
       <div className="w-full flex flex-col items-center gap-1">
-        {joinedCommunities.map((c) => (
-          <CommunityButton
-            key={c.id}
-            community={c}
-            isActive={activeCommunityId === c.id}
-            onContextMenu={(e, comm) => {
-              e.preventDefault();
-              setCommunityContextMenu({ x: e.clientX, y: e.clientY, community: comm });
-            }}
-          />
-        ))}
+        {joinedCommunities.length > 0 ? (
+          joinedCommunities.map((c) => (
+            <CommunityButton
+              key={c.id}
+              community={c}
+              isActive={activeCommunityId === c.id}
+              onContextMenu={(e, comm) => {
+                e.preventDefault();
+                setCommunityContextMenu({ x: e.clientX, y: e.clientY, community: comm });
+              }}
+            />
+          ))
+        ) : (
+          <Tooltip label="No joined spaces yet. Click explore below to find communities!">
+            <div className="w-10 h-10 rounded-2xl border border-dashed border-white/15 flex items-center justify-center text-neutral-500 text-xs my-1" aria-label="No communities joined">
+              —
+            </div>
+          </Tooltip>
+        )}
       </div>
 
       {/* Add Community Action */}

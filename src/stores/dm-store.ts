@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import toast from 'react-hot-toast';
 import type { User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import {
@@ -94,6 +95,21 @@ interface DMState {
     emoji: string,
     userId: string
   ) => Promise<void>;
+}
+
+// Client-side rate limiting: max 5 messages per 5 seconds
+const dmMsgTimestamps: number[] = [];
+function checkDmRateLimit(): boolean {
+  const now = Date.now();
+  while (dmMsgTimestamps.length > 0 && dmMsgTimestamps[0] < now - 5000) {
+    dmMsgTimestamps.shift();
+  }
+  if (dmMsgTimestamps.length >= 5) {
+    toast.error("You're sending messages too fast. Please wait a moment.");
+    return false;
+  }
+  dmMsgTimestamps.push(now);
+  return true;
 }
 
 export const useDMStore = create<DMState>()((set, get) => ({
@@ -273,6 +289,10 @@ export const useDMStore = create<DMState>()((set, get) => ({
     content: string,
     options?: SendDMOptions
   ) => {
+    if (!checkDmRateLimit()) {
+      return '';
+    }
+
     const text = (content || '').trim();
     if (!text && !options?.attachmentUrl) {
       throw new Error('Sender, recipient, and message text or attachment are required');

@@ -18,19 +18,32 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'Nexus', template: '%s · Nexus' },
+  metadataBase: new URL('https://nexus-app-ashy-theta.vercel.app'),
+  alternates: {
+    canonical: '/',
+  },
+  title: { 
+    default: 'Nexus — The Real-Time Community Platform for Modern Teams & Creators', 
+    template: '%s | Nexus - Real-Time Communities & Voice' 
+  },
   description:
-    'The next-generation community, collaboration, and communication platform. AI-powered, beautifully designed, built for everyone.',
-  keywords: ['community', 'chat', 'collaboration', 'gaming', 'education', 'creator'],
-  authors: [{ name: 'Nexus Team' }],
+    'The real-time community platform for modern teams and creators. Instant chat, WebRTC voice and video spaces, granular moderation roles, and private 1-on-1 direct messages.',
+  keywords: ['community', 'real-time chat', 'webrtc voice', 'group video', 'collaboration', 'creator spaces', 'moderation'],
+  authors: [{ name: 'Nexus' }],
   openGraph: {
     type: 'website',
-    title: 'Nexus — Community Reimagined',
-    description: 'The next-generation community platform with AI copilot, real-time collaboration, and beautiful design.',
+    locale: 'en_US',
+    url: 'https://nexus-app-ashy-theta.vercel.app',
     siteName: 'Nexus',
+    title: 'Nexus — The Real-Time Community Platform for Modern Teams & Creators',
+    description:
+      'Instant chat, WebRTC voice and video spaces, granular moderation roles, and private 1-on-1 direct messages.',
   },
-  twitter: { card: 'summary_large_image', title: 'Nexus', description: 'Community reimagined.' },
-  icons: { icon: '/favicon.svg' },
+  twitter: { 
+    card: 'summary_large_image', 
+    title: 'Nexus — The Real-Time Community Platform for Modern Teams & Creators', 
+    description: 'Instant chat, WebRTC voice and video spaces, granular moderation roles, and private 1-on-1 direct messages.' 
+  },
 };
 
 export const viewport: Viewport = {

@@ -359,6 +359,16 @@ export default function ChannelPage() {
           <p className="text-sm text-gray-400">{activeChannel?.topic ?? 'This is the start of this channel.'}</p>
         </div>
 
+        {/* Empty state when 0 messages */}
+        {groupedMessages.length === 0 && (
+          <div className="py-8 text-center flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+            <p className="text-sm font-medium text-white/80">No messages in this channel yet.</p>
+            <p className="text-xs text-neutral-400">
+              Be the first to say hello, share an idea, or ask a question!
+            </p>
+          </div>
+        )}
+
         {/* Message list */}
         {groupedMessages.map(({ msg, isGrouped }, idx) => {
           const prevMsg = idx > 0 ? groupedMessages[idx - 1]?.msg : null;

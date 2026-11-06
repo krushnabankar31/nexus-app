@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import toast from 'react-hot-toast';
 import type { Message, User } from '@nexus/types';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import {
@@ -11,6 +12,21 @@ import {
   query,
   serverTimestamp,
 } from 'firebase/firestore';
+
+// Client-side rate limiting: max 5 messages per 5 seconds
+const channelMsgTimestamps: number[] = [];
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  while (channelMsgTimestamps.length > 0 && channelMsgTimestamps[0] < now - 5000) {
+    channelMsgTimestamps.shift();
+  }
+  if (channelMsgTimestamps.length >= 5) {
+    toast.error("You're sending messages too fast. Please wait a moment.");
+    return false;
+  }
+  channelMsgTimestamps.push(now);
+  return true;
+}
 
 interface ChatState {
   messages: Record<string, Message[]>;
@@ -138,6 +154,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   addMessage: async (channelId, msg) => {
+    if (!checkRateLimit()) {
+      return;
+    }
+
     // 1. Optimistic UI update
     set((state) => ({
       messages: {

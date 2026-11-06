@@ -657,5 +657,48 @@ service cloud.firestore {
         isCommunityAdmin(communityId)
       );
     }
+
+    // ===============================================================
+    // 6. Community Channels & Channel Messages
+    // ===============================================================
+
+    match /channels/{channelId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+
+      match /messages/{messageId} {
+        // Authenticated users can read messages
+        allow read: if isAuthenticated();
+
+        // Sender must be authenticated, match authorId, content <= 2000 chars, cannot spoof author or timestamps
+        allow create: if isAuthenticated() &&
+          request.resource.data.authorId == request.auth.uid &&
+          isValidString(request.resource.data.content, 0, 2000);
+
+        // Updates: author can edit their own message content (up to 2000 chars), authorId and createdAt immutable
+        allow update: if isAuthenticated() && (
+          (
+            resource.data.authorId == request.auth.uid &&
+            isValidString(request.resource.data.content, 0, 2000) &&
+            areImmutableFieldsUnchanged(['authorId', 'createdAt'])
+          ) ||
+          // Community owner/admin can soft-delete or moderate
+          (
+            resource.data.communityId != '' &&
+            (isCommunityOwner(resource.data.communityId) || isCommunityAdmin(resource.data.communityId))
+          )
+        );
+
+        // Deletions: only message author, or community owner/admin can delete messages
+        allow delete: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid ||
+          (
+            resource.data.communityId != '' &&
+            (isCommunityOwner(resource.data.communityId) || isCommunityAdmin(resource.data.communityId))
+          )
+        );
+      }
+    }
   }
 }
